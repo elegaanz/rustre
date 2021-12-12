@@ -5,3 +5,6 @@ const n = 12;
 const f = 33.3;
 
 function a = b;
+
+function b(x : int; z : bool^4) returns (y : int)
+
