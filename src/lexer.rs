@@ -1,10 +1,9 @@
-use std::str::FromStr;
 use crate::location::{Location, Span, Spanned};
+use std::str::FromStr;
 
 pub type Tok<'a, 'f> = Spanned<'f, TokInfo<'a>>;
 
-#[derive(Debug)]
-#[derive(PartialEq)]
+#[derive(Debug, PartialEq)]
 pub enum TokInfo<'a> {
     EOF,
     Extern,
@@ -139,16 +138,18 @@ impl<'a, 'f> Lexer<'a, 'f> {
                 Grammar::Str => {
                     if self.current() == "\"" {
                         grammar = Grammar::Main;
-                        tokens.push(self.token(
-                            len as u64,
-                            TokInfo::Str(&self.src[tok_start + 1..self.pos]),
-                        ));
+                        tokens.push(
+                            self.token(
+                                len as u64,
+                                TokInfo::Str(&self.src[tok_start + 1..self.pos]),
+                            ),
+                        );
                         self.advance()?;
                         tok_start = self.pos;
                     } else {
                         self.advance()?;
                     }
-                },
+                }
                 Grammar::InlineComment => {
                     if self.current() == "\n" {
                         grammar = Grammar::Main;
@@ -157,7 +158,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     } else {
                         self.advance()?;
                     }
-                },
+                }
                 Grammar::Main => {
                     let tok_str = &self.src[tok_start..self.pos];
                     if tok_str == "--" {
@@ -183,7 +184,8 @@ impl<'a, 'f> Lexer<'a, 'f> {
                         let (op, should_reset) = self.find_keyword(1, next, self.current());
 
                         let mut ch = tok_str.chars();
-                        let is_ident = ch.next().map(char::is_alphabetic).unwrap_or(false) && ch.all(|x| x.is_alphanumeric() || x == '_');
+                        let is_ident = ch.next().map(char::is_alphabetic).unwrap_or(false)
+                            && ch.all(|x| x.is_alphanumeric() || x == '_');
 
                         if let Some(kw) = kw {
                             tokens.push(kw);
@@ -207,14 +209,16 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     } else {
                         self.advance()?;
                     }
-                },
+                }
                 Grammar::Comment(end) => {
-                    if &self.src[self.pos - 2..self.pos - 1] == "*" && self.src[self.pos - 1..self.pos].chars().next() == Some(end) {
+                    if &self.src[self.pos - 2..self.pos - 1] == "*"
+                        && self.src[self.pos - 1..self.pos].chars().next() == Some(end)
+                    {
                         grammar = Grammar::Main;
                     }
                     self.advance()?;
                     tok_start = self.pos;
-                },
+                }
             }
         }
 
@@ -273,7 +277,12 @@ impl<'a, 'f> Lexer<'a, 'f> {
         }
     }
 
-    fn find_keyword(&self, len: u64, next: Option<&'a str>, tok_str: &'a str) -> (Option<Tok<'a, 'f>>, bool) {
+    fn find_keyword(
+        &self,
+        len: u64,
+        next: Option<&'a str>,
+        tok_str: &'a str,
+    ) -> (Option<Tok<'a, 'f>>, bool) {
         let mut should_reset = true;
         let t = match tok_str {
             "extern" => Some(self.token(len, TokInfo::Extern)),
@@ -333,8 +342,22 @@ impl<'a, 'f> Lexer<'a, 'f> {
             "+" => Some(self.token(len, TokInfo::Plus)),
             "^" => Some(self.token(len, TokInfo::Hat)),
             "#" => Some(self.token(len, TokInfo::Sharp)),
-            "-" => if next != Some("-") { Some(self.token(len, TokInfo::Minus)) } else { should_reset = false; None },
-            "/" => if next != Some("*") { Some(self.token(len, TokInfo::Slash)) } else { should_reset = false; None },
+            "-" => {
+                if next != Some("-") {
+                    Some(self.token(len, TokInfo::Minus))
+                } else {
+                    should_reset = false;
+                    None
+                }
+            }
+            "/" => {
+                if next != Some("*") {
+                    Some(self.token(len, TokInfo::Slash))
+                } else {
+                    should_reset = false;
+                    None
+                }
+            }
             "%" => Some(self.token(len, TokInfo::Percent)),
             "*" => Some(self.token(len, TokInfo::Star)),
             "|" => Some(self.token(len, TokInfo::Bar)),
@@ -343,7 +366,14 @@ impl<'a, 'f> Lexer<'a, 'f> {
             "," => Some(self.token(len, TokInfo::Coma)),
             ";" => Some(self.token(len, TokInfo::Semicolon)),
             ":" => Some(self.token(len, TokInfo::Colon)),
-            "(" => if next != Some("*") { Some(self.token(len, TokInfo::OpenPar)) } else { should_reset = false; None },
+            "(" => {
+                if next != Some("*") {
+                    Some(self.token(len, TokInfo::OpenPar))
+                } else {
+                    should_reset = false;
+                    None
+                }
+            }
             ")" => Some(self.token(len, TokInfo::ClosePar)),
             "{" => Some(self.token(len, TokInfo::OpenBrace)),
             "}" => Some(self.token(len, TokInfo::CloseBrace)),
@@ -369,7 +399,6 @@ mod tests {
         }
     }
 
-
     fn test_lexer<'a>(src: &'a str, expected: Vec<TokInfo<'a>>) {
         let mut lex = Lexer::new("main.lus", src);
         let toks = lex.lex().unwrap();
@@ -378,46 +407,99 @@ mod tests {
 
     #[test]
     fn test_empty() {
-        test_lexer("", vec![ TokInfo::EOF ])
+        test_lexer("", vec![TokInfo::EOF])
     }
 
     #[test]
     fn test_keyword() {
-        test_lexer("function", vec![ TokInfo::Function, TokInfo::EOF ])
+        test_lexer("function", vec![TokInfo::Function, TokInfo::EOF])
     }
-    
+
     #[test]
     fn test_keywords() {
-        test_lexer("extern function", vec![ TokInfo::Extern, TokInfo::Function, TokInfo::EOF ]);
-        test_lexer("functional", vec![ TokInfo::Ident("functional"), TokInfo::EOF ]);
+        test_lexer(
+            "extern function",
+            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+        );
+        test_lexer(
+            "functional",
+            vec![TokInfo::Ident("functional"), TokInfo::EOF],
+        );
     }
 
     #[test]
     fn test_spaces() {
-        test_lexer("extern\n  \t\r\nfunction", vec![ TokInfo::Extern, TokInfo::Function, TokInfo::EOF ]);
-        test_lexer("\n  \t\r\nextern function", vec![ TokInfo::Extern, TokInfo::Function, TokInfo::EOF ]);
-        test_lexer("extern function\n  \t\r\n", vec![ TokInfo::Extern, TokInfo::Function, TokInfo::EOF ]);
+        test_lexer(
+            "extern\n  \t\r\nfunction",
+            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+        );
+        test_lexer(
+            "\n  \t\r\nextern function",
+            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+        );
+        test_lexer(
+            "extern function\n  \t\r\n",
+            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+        );
     }
 
     #[test]
     fn test_iconst() {
-        test_lexer("42 -12", vec![ TokInfo::IConst(42), TokInfo::Minus, TokInfo::IConst(12), TokInfo::EOF ])
+        test_lexer(
+            "42 -12",
+            vec![
+                TokInfo::IConst(42),
+                TokInfo::Minus,
+                TokInfo::IConst(12),
+                TokInfo::EOF,
+            ],
+        )
     }
 
     #[test]
     fn test_str() {
-        test_lexer("include \"memoire.lus\"", vec![ TokInfo::Include, TokInfo::Str("memoire.lus"), TokInfo::EOF ]);
+        test_lexer(
+            "include \"memoire.lus\"",
+            vec![TokInfo::Include, TokInfo::Str("memoire.lus"), TokInfo::EOF],
+        );
     }
 
     #[test]
     fn test_comments() {
-        test_lexer("-- comment\nfunction\nfunction --comment", vec![ TokInfo::Function, TokInfo::Function, TokInfo::EOF ]);
-        test_lexer("include (* hello *) extern /* world */ function", vec![ TokInfo::Include, TokInfo::Extern, TokInfo::Function, TokInfo::EOF ])
+        test_lexer(
+            "-- comment\nfunction\nfunction --comment",
+            vec![TokInfo::Function, TokInfo::Function, TokInfo::EOF],
+        );
+        test_lexer(
+            "include (* hello *) extern /* world */ function",
+            vec![
+                TokInfo::Include,
+                TokInfo::Extern,
+                TokInfo::Function,
+                TokInfo::EOF,
+            ],
+        )
     }
 
     #[test]
     fn test_ops() {
-        test_lexer("12 + 3", vec![ TokInfo::IConst(12), TokInfo::Plus, TokInfo::IConst(3), TokInfo::EOF ]);
-        test_lexer("42*7", vec![ TokInfo::IConst(42), TokInfo::Star, TokInfo::IConst(7), TokInfo::EOF ]);
+        test_lexer(
+            "12 + 3",
+            vec![
+                TokInfo::IConst(12),
+                TokInfo::Plus,
+                TokInfo::IConst(3),
+                TokInfo::EOF,
+            ],
+        );
+        test_lexer(
+            "42*7",
+            vec![
+                TokInfo::IConst(42),
+                TokInfo::Star,
+                TokInfo::IConst(7),
+                TokInfo::EOF,
+            ],
+        );
     }
 }

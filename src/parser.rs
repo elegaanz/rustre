@@ -1,11 +1,11 @@
 use crate::lexer::{Tok, TokInfo};
-use crate::location::{Spanned};
+use crate::location::Spanned;
 
 pub struct Parser;
 
 #[derive(Debug)]
 pub enum Error<'a, 'f> {
-    UnexpectedToken(&'a [Tok<'a, 'f>])
+    UnexpectedToken(&'a [Tok<'a, 'f>]),
 }
 
 #[derive(Debug)]
@@ -27,15 +27,13 @@ pub enum Decl<'a> {
     Node,
 }
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum ConstValue {
     Int(i64),
     Float(f64),
 }
 
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub enum Expr {
     Const(ConstValue),
 }
@@ -44,7 +42,10 @@ type Res<'a, 'f, T> = Result<(&'a [Tok<'a, 'f>], T), Error<'a, 'f>>;
 type SpannedRes<'a, 'f, T> = Res<'a, 'f, Spanned<'f, T>>;
 
 impl Parser {
-    fn expect<'a, 'f>(toks: &'a [Tok<'a, 'f>], t: TokInfo<'a>) -> Result<&'a Tok<'a, 'f>, Error<'a, 'f>> {
+    fn expect<'a, 'f>(
+        toks: &'a [Tok<'a, 'f>],
+        t: TokInfo<'a>,
+    ) -> Result<&'a Tok<'a, 'f>, Error<'a, 'f>> {
         match toks.get(0) {
             Some(x) if x.item == t => Ok(x),
             _ => Err(Error::UnexpectedToken(toks)),
@@ -77,10 +78,14 @@ impl Parser {
     fn parse_include<'a, 'f>(toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, &'a str> {
         if let Ok(kw) = Self::expect(toks, TokInfo::Include) {
             match toks.get(1) {
-                Some(tok @ Spanned { item: TokInfo::Str(inc), .. }) => Ok((
-                    &toks[2..],
-                    Spanned::fusion(kw, tok, inc),
-                )),
+                Some(
+                    tok
+                    @
+                    Spanned {
+                        item: TokInfo::Str(inc),
+                        ..
+                    },
+                ) => Ok((&toks[2..], Spanned::fusion(kw, tok, inc))),
                 _ => Err(Error::UnexpectedToken(&toks[1..])),
             }
         } else {
@@ -88,11 +93,15 @@ impl Parser {
         }
     }
 
-    fn parse_package_list<'a, 'f>(_toks: &'a [Tok<'a, 'f>]) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a>>>> {
+    fn parse_package_list<'a, 'f>(
+        _toks: &'a [Tok<'a, 'f>],
+    ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a>>>> {
         todo!()
     }
-    
-    fn parse_package_body<'a, 'f>(toks: &'a [Tok<'a, 'f>]) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a>>>> {
+
+    fn parse_package_body<'a, 'f>(
+        toks: &'a [Tok<'a, 'f>],
+    ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a>>>> {
         let mut decls = Vec::new();
         let mut toks = toks;
         while let Ok((t, mut decl)) = Self::parse_const_decl(toks) {
@@ -102,7 +111,9 @@ impl Parser {
         Ok((toks, decls))
     }
 
-    fn parse_const_decl<'a, 'f>(toks: &'a [Tok<'a, 'f>]) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a>>>> {
+    fn parse_const_decl<'a, 'f>(
+        toks: &'a [Tok<'a, 'f>],
+    ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a>>>> {
         let kw = Self::expect(toks, TokInfo::Const)?;
         let mut toks = toks;
         let (t, id) = Self::parse_id(&toks[1..])?;
@@ -134,16 +145,40 @@ impl Parser {
 
         let ty = ty.map(|x| x.item);
         let value = expr.map(|x| x.item);
-        Ok((&toks[1..], ids.into_iter().map(|i| Spanned::fusion(kw, &i, Decl::Const {
-            name: i.item,
-            ty,
-            value: value.clone(),
-        })).collect()))
+        Ok((
+            &toks[1..],
+            ids.into_iter()
+                .map(|i| {
+                    Spanned::fusion(
+                        kw,
+                        &i,
+                        Decl::Const {
+                            name: i.item,
+                            ty,
+                            value: value.clone(),
+                        },
+                    )
+                })
+                .collect(),
+        ))
     }
 
     fn parse_id<'a, 'f>(toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, &'a str> {
         match toks.get(0) {
-            Some(tok @ Spanned { item: TokInfo::Ident(x), .. }) => Ok((&toks[1..], Spanned { span: tok.span.clone(), item: x })),
+            Some(
+                tok
+                @
+                Spanned {
+                    item: TokInfo::Ident(x),
+                    ..
+                },
+            ) => Ok((
+                &toks[1..],
+                Spanned {
+                    span: tok.span.clone(),
+                    item: x,
+                },
+            )),
             _ => Err(Error::UnexpectedToken(&toks)),
         }
     }
@@ -155,7 +190,20 @@ impl Parser {
 
     fn parse_const<'a, 'f>(toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr> {
         match toks.get(0) {
-            Some(tok @ Spanned { item: TokInfo::IConst(i), .. }) => Ok((&toks[1..], Spanned { span: tok.span.clone(), item: Expr::Const(ConstValue::Int(*i)) })),
+            Some(
+                tok
+                @
+                Spanned {
+                    item: TokInfo::IConst(i),
+                    ..
+                },
+            ) => Ok((
+                &toks[1..],
+                Spanned {
+                    span: tok.span.clone(),
+                    item: Expr::Const(ConstValue::Int(*i)),
+                },
+            )),
             _ => Err(Error::UnexpectedToken(&toks)),
         }
     }

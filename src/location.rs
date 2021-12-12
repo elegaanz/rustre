@@ -1,14 +1,12 @@
 #[cfg_attr(test, derive(Debug, PartialEq))]
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Location {
     pub line: u64,
     pub col: u64,
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
-#[derive(Clone)]
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct Span<'f> {
     pub file: &'f str,
     pub start: Location,
