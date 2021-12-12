@@ -1,11 +1,12 @@
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
 pub struct Location {
     pub line: u64,
     pub col: u64,
+    pub pos: u64,
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Clone, Debug)]
 pub struct Span<'f> {
     pub file: &'f str,
@@ -13,7 +14,7 @@ pub struct Span<'f> {
     pub end: Location,
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Debug)]
 pub struct Spanned<'f, T: std::fmt::Debug> {
     pub span: Span<'f>,

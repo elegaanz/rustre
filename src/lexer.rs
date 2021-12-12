@@ -96,7 +96,7 @@ enum Grammar {
     Comment(char),
 }
 
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[cfg_attr(test, derive(PartialEq))]
 #[derive(Debug)]
 pub enum Error {
     UnclosedStr,
@@ -190,7 +190,12 @@ impl<'a, 'f> Lexer<'a, 'f> {
                         if let Some(kw) = kw {
                             tokens.push(kw);
                         } else if let Ok(i) = i64::from_str(tok_str) {
-                            tokens.push(self.token(len, TokInfo::IConst(i)));
+                            if self.current() != "." {
+                                tokens.push(self.token(len, TokInfo::IConst(i)));
+                            } else {
+                                self.advance()?;
+                                continue;
+                            }
                         } else if let Ok(r) = f64::from_str(tok_str) {
                             tokens.push(self.token(len, TokInfo::RConst(r)));
                         } else if is_ident {
@@ -267,10 +272,12 @@ impl<'a, 'f> Lexer<'a, 'f> {
                 start: Location {
                     line: self.line,
                     col: self.col - len,
+                    pos: (self.pos as u64) - len,
                 },
                 end: Location {
                     line: self.line,
                     col: self.col,
+                    pos: self.pos as u64,
                 },
             },
             item: info,
@@ -362,7 +369,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
             "*" => Some(self.token(len, TokInfo::Star)),
             "|" => Some(self.token(len, TokInfo::Bar)),
             "=" => Some(self.token(len, TokInfo::Equal)),
-            "." => Some(self.token(len, TokInfo::Dot)),
+            "." => if next.map(|x| x.chars().all(char::is_numeric)).unwrap_or(false) { should_reset = false; None } else { Some(self.token(len, TokInfo::Dot)) },
             "," => Some(self.token(len, TokInfo::Coma)),
             ";" => Some(self.token(len, TokInfo::Semicolon)),
             ":" => Some(self.token(len, TokInfo::Colon)),
@@ -392,10 +399,11 @@ mod tests {
     use super::*;
 
     fn check_tok_info<'a, 'f>(actual: Vec<Tok<'a, 'f>>, expected: Vec<TokInfo<'a>>) {
+        dbg!(&actual);
         assert_eq!(actual.len(), expected.len());
 
         for (ref a, ref e) in actual.iter().zip(expected.iter()) {
-            assert_eq!(a.tok, **e);
+            assert_eq!(a.item, **e);
         }
     }
 
@@ -451,6 +459,17 @@ mod tests {
                 TokInfo::IConst(42),
                 TokInfo::Minus,
                 TokInfo::IConst(12),
+                TokInfo::EOF,
+            ],
+        )
+    }
+
+    #[test]
+    fn test_rconst() {
+        test_lexer(
+            "33.3",
+            vec![
+                TokInfo::RConst(33.3),
                 TokInfo::EOF,
             ],
         )
