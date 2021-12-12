@@ -21,6 +21,15 @@ pub struct Spanned<'f, T: std::fmt::Debug> {
     pub item: T,
 }
 
+impl<'f, T: std::fmt::Debug + Clone> Clone for Spanned<'f, T> {
+    fn clone(&self) -> Self {
+        Self {
+            span: self.span.clone(),
+            item: self.item.clone(),
+        }
+    }
+}
+
 impl<'f, T: std::fmt::Debug> From<Spanned<'f, T>> for Span<'f> {
     fn from(spanned: Spanned<'f, T>) -> Span<'f> {
         spanned.span

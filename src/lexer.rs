@@ -3,7 +3,7 @@ use std::str::FromStr;
 
 pub type Tok<'a, 'f> = Spanned<'f, TokInfo<'a>>;
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum TokInfo<'a> {
     EOF,
     Extern,
@@ -369,7 +369,17 @@ impl<'a, 'f> Lexer<'a, 'f> {
             "*" => Some(self.token(len, TokInfo::Star)),
             "|" => Some(self.token(len, TokInfo::Bar)),
             "=" => Some(self.token(len, TokInfo::Equal)),
-            "." => if next.map(|x| x.chars().all(char::is_numeric)).unwrap_or(false) { should_reset = false; None } else { Some(self.token(len, TokInfo::Dot)) },
+            "." => {
+                if next
+                    .map(|x| x.chars().all(char::is_numeric))
+                    .unwrap_or(false)
+                {
+                    should_reset = false;
+                    None
+                } else {
+                    Some(self.token(len, TokInfo::Dot))
+                }
+            }
             "," => Some(self.token(len, TokInfo::Coma)),
             ";" => Some(self.token(len, TokInfo::Semicolon)),
             ":" => Some(self.token(len, TokInfo::Colon)),
@@ -466,13 +476,7 @@ mod tests {
 
     #[test]
     fn test_rconst() {
-        test_lexer(
-            "33.3",
-            vec![
-                TokInfo::RConst(33.3),
-                TokInfo::EOF,
-            ],
-        )
+        test_lexer("33.3", vec![TokInfo::RConst(33.3), TokInfo::EOF])
     }
 
     #[test]

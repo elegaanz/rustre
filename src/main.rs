@@ -1,4 +1,4 @@
-use ariadne::{Report, ReportKind, Label};
+use ariadne::{Label, Report, ReportKind};
 
 mod lexer;
 mod location;
@@ -20,7 +20,7 @@ fn main() {
                 println!("Partial AST was built :");
             }
             println!("{:#?}", ast)
-        },
+        }
         Err(e) => print_err(e, &contents),
     }
 }
@@ -28,26 +28,32 @@ fn main() {
 fn print_err<'a, 'f>(err: parser::Error<'a, 'f>, contents: &'a str) {
     match err {
         parser::Error::UnexpectedToken(toks, exp) => {
-            let span = toks.get(0).map(|t| t.span.clone()).unwrap_or(location::Span {
-                file: "??",
-                start: location::Location { line: 0, col: 0, pos: 0 },
-                end: location::Location { line: 0, col: 0, pos: 0 },
-            });
+            let span = toks
+                .get(0)
+                .map(|t| t.span.clone())
+                .unwrap_or(location::Span {
+                    file: "??",
+                    start: location::Location {
+                        line: 0,
+                        col: 0,
+                        pos: 0,
+                    },
+                    end: location::Location {
+                        line: 0,
+                        col: 0,
+                        pos: 0,
+                    },
+                });
             let path = span.file;
             let start = span.start.pos as usize;
             let end = span.end.pos as usize;
             Report::build(ReportKind::Error, path.to_owned(), start)
                 .with_message("Unexpected token")
-                .with_label(
-                    Label::new((path.to_owned(), start..end))
-                        .with_message(exp)
-                )
+                .with_label(Label::new((path.to_owned(), start..end)).with_message(exp))
                 .finish()
-                .print(ariadne::sources(vec![
-                    (path.to_owned(), contents),
-                ]))
+                .print(ariadne::sources(vec![(path.to_owned(), contents)]))
                 .unwrap();
-        },
+        }
         e => println!("Error: {:?}", e),
     }
 }
