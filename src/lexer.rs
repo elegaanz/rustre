@@ -1,25 +1,10 @@
 use std::str::FromStr;
+use crate::location::{Location, Span, Spanned};
 
-#[cfg_attr(test, derive(Debug, PartialEq))]
-pub struct Location {
-    line: u64,
-    col: u64,
-}
+pub type Tok<'a, 'f> = Spanned<'f, TokInfo<'a>>;
 
-#[cfg_attr(test, derive(Debug, PartialEq))]
-pub struct Span<'f> {
-    file: &'f str,
-    start: Location,
-    end: Location,
-}
-
-#[cfg_attr(test, derive(Debug, PartialEq))]
-pub struct Tok<'a, 'f> {
-    span: Span<'f>,
-    tok: TokInfo<'a>,
-}
-
-#[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug)]
+#[derive(PartialEq)]
 pub enum TokInfo<'a> {
     EOF,
     Extern,
@@ -113,6 +98,7 @@ enum Grammar {
 }
 
 #[cfg_attr(test, derive(Debug, PartialEq))]
+#[derive(Debug)]
 pub enum Error {
     UnclosedStr,
     UnclosedComment,
@@ -271,7 +257,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
     }
 
     fn token(&self, len: u64, info: TokInfo<'a>) -> Tok<'a, 'f> {
-        Tok {
+        Spanned {
             span: Span {
                 file: self.file,
                 start: Location {
@@ -283,7 +269,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     col: self.col,
                 },
             },
-            tok: info,
+            item: info,
         }
     }
 

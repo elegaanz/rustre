@@ -1,0 +1,3 @@
+include "other.lus"
+
+const n = 12;
