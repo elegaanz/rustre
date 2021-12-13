@@ -21,7 +21,7 @@ pub enum Decl<'a, 'f> {
     Const {
         name: &'a str,
         /// May be None for external constants
-        value: Option<Spanned<'f, Expr>>,
+        value: Option<Spanned<'f, Expr<'a, 'f>>>,
         ty: Option<&'a str>,
     },
     Ty,
@@ -51,7 +51,7 @@ pub enum Decl<'a, 'f> {
 pub enum StaticParamDecl<'a, 'f> {
     Const {
         name: Spanned<'f, &'a str>,
-        ty: Spanned<'f, Ty<'f>>,
+        ty: Spanned<'f, Ty<'a, 'f>>,
     },
     Ty {
         name: Spanned<'f, &'a str>,
@@ -78,12 +78,12 @@ pub struct Variable<'a, 'f> {
 #[derive(Clone, Debug)]
 pub struct VariableDecl<'a, 'f> {
     name: Spanned<'f, &'a str>,
-    ty: Spanned<'f, Ty<'f>>,
+    ty: Spanned<'f, Ty<'a, 'f>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Ty<'f> {
-    len: Option<Spanned<'f, Expr>>,
+pub struct Ty<'a, 'f> {
+    len: Option<Spanned<'f, Expr<'a, 'f>>>,
     base: BaseTy,
 }
 
@@ -101,8 +101,54 @@ pub enum ConstValue {
 }
 
 #[derive(Clone, Debug)]
-pub enum Expr {
+pub enum Expr<'a, 'f> {
     Const(ConstValue),
+    Ident(&'a str),
+    Unary(Spanned<'f, UnaryOp>, Spanned<'f, Box<Expr<'a, 'f>>>),
+    Binary(
+        Spanned<'f, BinaryOp>,
+        Spanned<'f, Box<Expr<'a, 'f>>>,
+        Spanned<'f, Box<Expr<'a, 'f>>>,
+    ),
+    StructAccess(Spanned<'f, Box<Expr<'a, 'f>>>, &'a str),
+}
+
+#[derive(Clone, Debug)]
+pub enum UnaryOp {
+    Not,
+    Minus,
+    Pre,
+    Current,
+    IntToReal,
+    RealToInt,
+}
+
+#[derive(Clone, Debug)]
+pub enum BinaryOp {
+    When,
+    FBy,
+    Arrow,
+    And,
+    Or,
+    Xor,
+    Impl,
+    Equal,
+    Neq,
+    Lt,
+    Gt,
+    Lte,
+    Gte,
+    Mod,
+    Minus,
+    Plus,
+    Slash,
+    Times,
+    Hat,
+    Bar,
+    Index,
+    Slice,
+    Div,
+    Prod,
 }
 
 type Res<'a, 'f, T> = Result<(&'a [Tok<'a, 'f>], T), Error<'a, 'f>>;
@@ -328,13 +374,106 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
     }
 
-    fn parse_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr> {
-        // TODO
-        let cst = self.parse_const(toks);
-        cst
+    fn parse_unary(
+        &mut self,
+        toks: &'a [Tok<'a, 'f>],
+        tok: TokInfo<'a>,
+        op: UnaryOp,
+    ) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
+        let op_token = self.expect(toks, tok, "expected unary operator")?;
+        let (t, expr) = self.parse_expr(&toks[1..])?;
+        Ok((
+            t,
+            Spanned::fusion(
+                toks[0].span.clone(),
+                t[0].span.clone(),
+                Expr::Unary(
+                    Spanned {
+                        item: op,
+                        span: op_token.span.clone(),
+                    },
+                    Spanned {
+                        span: expr.span,
+                        item: Box::new(expr.item),
+                    },
+                ),
+            ),
+        ))
     }
 
-    fn parse_const(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr> {
+    fn parse_binary(
+        &mut self,
+        toks: &'a [Tok<'a, 'f>],
+        tok: TokInfo<'a>,
+        op: BinaryOp,
+    ) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
+        let (t, lhs) = self.parse_expr(&toks)?;
+        let op_token = self.expect(t, tok, "expected binary operator")?;
+        let (t, rhs) = self.parse_expr(&t[1..])?;
+        Ok((
+            t,
+            Spanned::fusion(
+                toks[0].span.clone(),
+                t[0].span.clone(),
+                Expr::Binary(
+                    Spanned {
+                        item: op,
+                        span: op_token.span.clone(),
+                    },
+                    Spanned {
+                        span: lhs.span,
+                        item: Box::new(lhs.item),
+                    },
+                    Spanned {
+                        span: rhs.span,
+                        item: Box::new(rhs.item),
+                    },
+                ),
+            ),
+        ))
+    }
+
+    fn parse_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
+        // TODO
+        self.parse_const(toks)
+            .or_else(|_| {
+                let (t, id) = self.parse_id(toks)?;
+                Ok((
+                    t,
+                    Spanned {
+                        span: id.span.clone(),
+                        item: Expr::Ident(id.item),
+                    },
+                ))
+            })
+            .or_else(|_: Error| self.parse_unary(toks, TokInfo::Not, UnaryOp::Not))
+            .or_else(|_: Error| self.parse_unary(toks, TokInfo::Minus, UnaryOp::Minus))
+            .or_else(|_: Error| self.parse_unary(toks, TokInfo::Pre, UnaryOp::Pre))
+            .or_else(|_: Error| self.parse_unary(toks, TokInfo::Current, UnaryOp::Current))
+            .or_else(|_: Error| self.parse_unary(toks, TokInfo::Int, UnaryOp::RealToInt))
+            .or_else(|_: Error| self.parse_unary(toks, TokInfo::Real, UnaryOp::IntToReal))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::FBy, BinaryOp::FBy))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Arrow, BinaryOp::Arrow))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::And, BinaryOp::And))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Or, BinaryOp::Or))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Xor, BinaryOp::Xor))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Impl, BinaryOp::Impl))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Equal, BinaryOp::Equal))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Neq, BinaryOp::Neq))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Lt, BinaryOp::Lt))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Lte, BinaryOp::Lte))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Gt, BinaryOp::Gte))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Div, BinaryOp::Div))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Mod, BinaryOp::Mod))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Minus, BinaryOp::Minus))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Plus, BinaryOp::Plus))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Slash, BinaryOp::Slash))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Star, BinaryOp::Prod))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Bar, BinaryOp::Bar))
+            .or_else(|_: Error| self.parse_binary(toks, TokInfo::Hat, BinaryOp::Hat))
+    }
+
+    fn parse_const(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
         let neg = self.expect(toks, TokInfo::Minus, "expected -").is_ok();
         match toks.get(if neg { 1 } else { 0 }) {
             Some(
@@ -575,7 +714,7 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
     }
 
-    fn parse_ty(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Ty<'f>> {
+    fn parse_ty(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Ty<'a, 'f>> {
         // TODO: handle named types
         let start = toks[0].span.clone();
         let base = if self.expect(toks, TokInfo::Int, "int").is_ok() {

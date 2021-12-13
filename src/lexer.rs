@@ -115,12 +115,16 @@ impl<'a, 'f> Lexer<'a, 'f> {
     pub fn lex(&mut self) -> Result<Vec<Tok>, Error> {
         let total_len = self.src.len();
         let mut tokens = Vec::with_capacity(self.src.len() / 4);
-        let mut end = total_len;
+        let mut end = self.find_next_delimiter(0);
         let mut grammar = Grammar::Main;
         let mut pos = 0;
         let mut line = 1;
         let mut col = 0;
         while pos < total_len {
+            if total_len > 5000 {
+                // i know the lexer is slow so here is a progress bar
+                print!("\r {} / {}", pos, total_len);
+            }
             match grammar {
                 Grammar::Main => {
                     let tok_str = &self.src[pos..end];
@@ -136,14 +140,14 @@ impl<'a, 'f> Lexer<'a, 'f> {
                         if let Some(tok) = Self::match_tok(self.file, line, col, pos, tok_str) {
                             tokens.push(tok);
                             pos = end;
-                            end = total_len;
+                            end = self.find_next_delimiter(pos);
                         } else {
                             end -= 1;
                         }
                     }
                 }
                 Grammar::Str => {
-                    let mut str_end = pos + 1; // TODO -> +1 may overflow => unclosed str
+                    let mut str_end = pos + 1;
                     let mut added_lines = 0;
                     let mut added_cols = 0;
                     while str_end + 1 < total_len && &self.src[str_end..str_end + 1] != "\"" {
@@ -173,7 +177,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                         item: TokInfo::Str(&self.src[pos + 1..str_end]),
                     });
                     pos = str_end + 1;
-                    end = total_len;
+                    end = self.find_next_delimiter(pos);
                     line += added_lines;
                     col += added_cols;
                     if pos < total_len || &self.src[str_end..str_end + 1] == "\"" {
@@ -181,7 +185,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     }
                 }
                 Grammar::Comment(end) => {
-                    let mut comm_end = pos + 1; // TODO -> +1 may overflow => unclosed str
+                    let mut comm_end = pos + 1;
                     while comm_end + 1 < total_len
                         && &self.src[comm_end..comm_end + 2] != &format!("*{}", end)
                     {
@@ -200,7 +204,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     }
                 }
                 Grammar::InlineComment => {
-                    let mut comm_end = pos + 1; // TODO -> +1 may overflow => unclosed str
+                    let mut comm_end = pos + 1;
                     while comm_end + 1 < total_len && &self.src[comm_end..comm_end + 1] != "\n" {
                         match &self.src[comm_end..comm_end + 1] {
                             "\n" => {
@@ -266,6 +270,57 @@ impl<'a, 'f> Lexer<'a, 'f> {
         let pos = (pos as u64) + len;
         let col = col + len;
         match src {
+            "," => Some(Self::token(file, line, col, pos, len, TokInfo::Coma)),
+            ";" => Some(Self::token(file, line, col, pos, len, TokInfo::Semicolon)),
+            ":" => Some(Self::token(file, line, col, pos, len, TokInfo::Colon)),
+            "->" => Some(Self::token(file, line, col, pos, len, TokInfo::Arrow)),
+            "=>" => Some(Self::token(file, line, col, pos, len, TokInfo::Impl)),
+            "<=" => Some(Self::token(file, line, col, pos, len, TokInfo::Lte)),
+            "<>" => Some(Self::token(file, line, col, pos, len, TokInfo::Neq)),
+            ">=" => Some(Self::token(file, line, col, pos, len, TokInfo::Gte)),
+            ".." => Some(Self::token(file, line, col, pos, len, TokInfo::CDots)),
+            "**" => Some(Self::token(file, line, col, pos, len, TokInfo::Power)),
+            "<<" => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::OpenStaticPar,
+            )),
+            ">>" => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::CloseStaticPar,
+            )),
+            "+" => Some(Self::token(file, line, col, pos, len, TokInfo::Plus)),
+            "^" => Some(Self::token(file, line, col, pos, len, TokInfo::Hat)),
+            "#" => Some(Self::token(file, line, col, pos, len, TokInfo::Sharp)),
+            "-" => Some(Self::token(file, line, col, pos, len, TokInfo::Minus)),
+            "/" => Some(Self::token(file, line, col, pos, len, TokInfo::Slash)),
+            "%" => Some(Self::token(file, line, col, pos, len, TokInfo::Percent)),
+            "*" => Some(Self::token(file, line, col, pos, len, TokInfo::Star)),
+            "|" => Some(Self::token(file, line, col, pos, len, TokInfo::Bar)),
+            "=" => Some(Self::token(file, line, col, pos, len, TokInfo::Equal)),
+            "." => Some(Self::token(file, line, col, pos, len, TokInfo::Dot)),
+            "(" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenPar)),
+            ")" => Some(Self::token(file, line, col, pos, len, TokInfo::ClosePar)),
+            "{" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBrace)),
+            "}" => Some(Self::token(file, line, col, pos, len, TokInfo::CloseBrace)),
+            "[" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBracket)),
+            "]" => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::CloseBracket,
+            )),
+            "<" => Some(Self::token(file, line, col, pos, len, TokInfo::Lt)),
+            ">" => Some(Self::token(file, line, col, pos, len, TokInfo::Gt)),
             "extern" => Some(Self::token(file, line, col, pos, len, TokInfo::Extern)),
             "unsafe" => Some(Self::token(file, line, col, pos, len, TokInfo::Unsafe)),
             "and" => Some(Self::token(file, line, col, pos, len, TokInfo::And)),
@@ -311,74 +366,33 @@ impl<'a, 'f> Lexer<'a, 'f> {
             "end" => Some(Self::token(file, line, col, pos, len, TokInfo::End)),
             "include" => Some(Self::token(file, line, col, pos, len, TokInfo::Include)),
             "merge" => Some(Self::token(file, line, col, pos, len, TokInfo::Merge)),
-            "->" => Some(Self::token(file, line, col, pos, len, TokInfo::Arrow)),
-            "=>" => Some(Self::token(file, line, col, pos, len, TokInfo::Impl)),
-            "<=" => Some(Self::token(file, line, col, pos, len, TokInfo::Lte)),
-            "<>" => Some(Self::token(file, line, col, pos, len, TokInfo::Neq)),
-            ">=" => Some(Self::token(file, line, col, pos, len, TokInfo::Gte)),
-            ".." => Some(Self::token(file, line, col, pos, len, TokInfo::CDots)),
-            "**" => Some(Self::token(file, line, col, pos, len, TokInfo::Power)),
-            "<<" => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::OpenStaticPar,
-            )),
-            ">>" => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::CloseStaticPar,
-            )),
-            "+" => Some(Self::token(file, line, col, pos, len, TokInfo::Plus)),
-            "^" => Some(Self::token(file, line, col, pos, len, TokInfo::Hat)),
-            "#" => Some(Self::token(file, line, col, pos, len, TokInfo::Sharp)),
-            "-" => Some(Self::token(file, line, col, pos, len, TokInfo::Minus)),
-            "/" => Some(Self::token(file, line, col, pos, len, TokInfo::Slash)),
-            "%" => Some(Self::token(file, line, col, pos, len, TokInfo::Percent)),
-            "*" => Some(Self::token(file, line, col, pos, len, TokInfo::Star)),
-            "|" => Some(Self::token(file, line, col, pos, len, TokInfo::Bar)),
-            "=" => Some(Self::token(file, line, col, pos, len, TokInfo::Equal)),
-            "." => Some(Self::token(file, line, col, pos, len, TokInfo::Dot)),
-            "," => Some(Self::token(file, line, col, pos, len, TokInfo::Coma)),
-            ";" => Some(Self::token(file, line, col, pos, len, TokInfo::Semicolon)),
-            ":" => Some(Self::token(file, line, col, pos, len, TokInfo::Colon)),
-            "(" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenPar)),
-            ")" => Some(Self::token(file, line, col, pos, len, TokInfo::ClosePar)),
-            "{" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBrace)),
-            "}" => Some(Self::token(file, line, col, pos, len, TokInfo::CloseBrace)),
-            "[" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBracket)),
-            "]" => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::CloseBracket,
-            )),
-            "<" => Some(Self::token(file, line, col, pos, len, TokInfo::Lt)),
-            ">" => Some(Self::token(file, line, col, pos, len, TokInfo::Gt)),
-            x if x.parse::<i64>().is_ok() => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::IConst(x.parse::<i64>().unwrap()),
-            )),
-            x if x.parse::<f64>().is_ok() => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::RConst(x.parse::<f64>().unwrap()),
-            )),
-            x if x.chars().all(char::is_alphanumeric) => {
+            x if x.chars().all(|c| c.is_numeric() || c == '-')
+                && x.chars().any(char::is_numeric) =>
+            {
+                Some(Self::token(
+                    file,
+                    line,
+                    col,
+                    pos,
+                    len,
+                    TokInfo::IConst(x.parse::<i64>().unwrap()),
+                ))
+            }
+            x if x
+                .chars()
+                .all(|c| c.is_numeric() || c == '.' || c == '-' || c == 'e' || c == 'E')
+                && x.chars().any(char::is_numeric) =>
+            {
+                Some(Self::token(
+                    file,
+                    line,
+                    col,
+                    pos,
+                    len,
+                    TokInfo::RConst(x.parse::<f64>().unwrap()),
+                ))
+            }
+            x if x.chars().all(|c| c.is_alphanumeric() || c == '_') => {
                 Some(Self::token(file, line, col, pos, len, TokInfo::Ident(x)))
             }
             _ => None,
@@ -405,6 +419,23 @@ impl<'a, 'f> Lexer<'a, 'f> {
             },
             item: info,
         }
+    }
+
+    fn find_next_delimiter(&self, pos: usize) -> usize {
+        let src = &self.src[pos..];
+        let mut delim = self.src.len();
+        for pat in [" ", "\t", "\n", "--", "/*", "(*", "\""] {
+            if let Some(pat_pos) = src.find(pat) {
+                // 10 = arbitrary limit considered short enough
+                if pat_pos < 10 {
+                    return pos + pat_pos + pat.len();
+                }
+                if pat_pos + pat.len() < delim {
+                    delim = pat_pos + pat.len();
+                }
+            }
+        }
+        delim
     }
 }
 
