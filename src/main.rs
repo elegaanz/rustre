@@ -18,6 +18,8 @@ fn main() {
                     print_err(err, &contents);
                 }
                 println!("Partial AST was built :");
+            } else {
+                println!("Parsing: OK");
             }
             println!("{:#?}", ast)
         }

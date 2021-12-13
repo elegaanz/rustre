@@ -50,18 +50,18 @@ pub enum Decl<'a, 'f> {
 #[derive(Debug)]
 pub enum StaticParamDecl<'a, 'f> {
     Const {
-        name: &'a str,
-        ty: &'a str,
+        name: Spanned<'f, &'a str>,
+        ty: Spanned<'f, Ty<'f>>,
     },
     Ty {
-        name: &'a str,
+        name: Spanned<'f, &'a str>,
     },
     Node {
         is_unsafe: bool,
         is_function: bool,
         name: Spanned<'f, &'a str>,
-        params: Vec<Spanned<'f, Variable<'a, 'f>>>,
-        outputs: Vec<Spanned<'f, Variable<'a, 'f>>>,
+        params: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
+        outputs: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
     },
 }
 
@@ -209,7 +209,7 @@ impl<'a, 'f> Parser<'a, 'f> {
                 first = false;
             } else {
                 if let Some(s) = sep.clone() {
-                    self.expect(toks, s, "separator")?;
+                    self.expect(toks, s, "expected separator")?;
                     toks = &toks[1..];
                 }
             }
@@ -308,6 +308,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     }
 
     fn parse_id(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, &'a str> {
+        // TODO: long ids
         match toks.get(0) {
             Some(
                 tok
@@ -328,6 +329,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     }
 
     fn parse_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr> {
+        // TODO
         let cst = self.parse_const(toks);
         cst
     }
@@ -377,7 +379,11 @@ impl<'a, 'f> Parser<'a, 'f> {
         toks = if is_unsafe { &toks[1..] } else { toks };
         let is_node = self.expect(&toks, TokInfo::Node, "node keyword").is_ok();
         if !is_node {
-            self.expect(&toks, TokInfo::Function, "function or node keyword")?;
+            self.expect(
+                &toks,
+                TokInfo::Function,
+                "expected function or node keyword",
+            )?;
         }
 
         toks = &toks[1..];
@@ -385,13 +391,14 @@ impl<'a, 'f> Parser<'a, 'f> {
         toks = t;
         let static_params = if self.expect(&toks, TokInfo::OpenStaticPar, "<<").is_ok() {
             let (t, sp) = self.parse_many(
-                toks,
+                &toks[1..],
                 Some(TokInfo::Semicolon),
                 |s, t| s.expect(t, TokInfo::CloseStaticPar, ">>").is_ok(),
                 |s, t| s.parse_static_param_decl(t),
             )?;
             toks = t;
             self.expect(toks, TokInfo::CloseStaticPar, "expected >>")?;
+            toks = &toks[1..];
             sp
         } else {
             Vec::new()
@@ -595,7 +602,66 @@ impl<'a, 'f> Parser<'a, 'f> {
         &mut self,
         toks: &'a [Tok<'a, 'f>],
     ) -> Res<'a, 'f, Vec<Spanned<'f, StaticParamDecl<'a, 'f>>>> {
-        // TODO
-        Ok((toks, vec![]))
+        self.parse_many(
+            toks,
+            Some(TokInfo::Semicolon),
+            |s, t| s.expect(t, TokInfo::CloseStaticPar, ">>").is_ok(),
+            |s, t| {
+                let start_span = t[0].span.clone();
+                if s.expect(t, TokInfo::Type, "type").is_ok() {
+                    let (t, name) = s.parse_id(&t[1..])?;
+                    Ok((
+                        t,
+                        vec![Spanned::fusion(
+                            start_span,
+                            name.span.clone(),
+                            StaticParamDecl::Ty { name },
+                        )],
+                    ))
+                } else if s.expect(t, TokInfo::Const, "const").is_ok() {
+                    let (t, name) = s.parse_id(&t[1..])?;
+                    s.expect(t, TokInfo::Colon, "expected :")?;
+                    let (t, ty) = s.parse_ty(&t[1..])?;
+                    Ok((
+                        t,
+                        vec![Spanned::fusion(
+                            start_span,
+                            ty.span.clone(),
+                            StaticParamDecl::Const { name, ty },
+                        )],
+                    ))
+                } else {
+                    let is_unsafe = s.expect(t, TokInfo::Unsafe, "unsafe").is_ok();
+                    let t = if is_unsafe { &t[1..] } else { t };
+                    let is_node = s.expect(t, TokInfo::Node, "node").is_ok();
+                    if !is_node {
+                        s.expect(t, TokInfo::Function, "expected function or node")?;
+                    }
+                    let t = &t[1..];
+                    let (t, name) = s.parse_id(t)?;
+                    s.expect(t, TokInfo::OpenPar, "expected (")?;
+                    let (t, params) = s.parse_var_decl(&t[1..], true)?;
+                    s.expect(t, TokInfo::ClosePar, "expected )")?;
+                    s.expect(&t[1..], TokInfo::Returns, "expected returns")?;
+                    s.expect(&t[2..], TokInfo::OpenPar, "expected (")?;
+                    let (t, outputs) = s.parse_var_decl(&t[3..], true)?;
+                    s.expect(t, TokInfo::ClosePar, "expected )")?;
+                    Ok((
+                        &t[1..],
+                        vec![Spanned::fusion(
+                            start_span,
+                            t[0].span.clone(),
+                            StaticParamDecl::Node {
+                                is_function: !is_node,
+                                is_unsafe,
+                                params,
+                                outputs,
+                                name,
+                            },
+                        )],
+                    ))
+                }
+            },
+        )
     }
 }

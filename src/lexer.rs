@@ -1,5 +1,4 @@
 use crate::location::{Location, Span, Spanned};
-use std::str::FromStr;
 
 pub type Tok<'a, 'f> = Spanned<'f, TokInfo<'a>>;
 
@@ -101,306 +100,311 @@ enum Grammar {
 pub enum Error {
     UnclosedStr,
     UnclosedComment,
-    UnexpectedEOF,
 }
 
 pub struct Lexer<'a, 'f> {
     file: &'f str,
-    line: u64,
-    col: u64,
     src: &'a str,
-    pos: usize,
 }
 
 impl<'a, 'f> Lexer<'a, 'f> {
     pub fn new(file: &'f str, src: &'a str) -> Self {
-        Lexer {
-            file,
-            src,
-            line: 1,
-            col: 0,
-            pos: 0,
-        }
+        Lexer { file, src }
     }
 
     pub fn lex(&mut self) -> Result<Vec<Tok>, Error> {
-        let mut tokens = Vec::with_capacity(self.src.len() / 4);
-
-        let mut tok_start = 0;
-        let mut grammar = Grammar::Main;
         let total_len = self.src.len();
-        let mut done = total_len == 0;
-        while !done {
-            done = self.pos >= total_len;
-
-            let len = (self.pos - tok_start) as u64;
+        let mut tokens = Vec::with_capacity(self.src.len() / 4);
+        let mut end = total_len;
+        let mut grammar = Grammar::Main;
+        let mut pos = 0;
+        let mut line = 1;
+        let mut col = 0;
+        while pos < total_len {
             match grammar {
-                Grammar::Str => {
-                    if self.current() == "\"" {
-                        grammar = Grammar::Main;
-                        tokens.push(
-                            self.token(
-                                len as u64,
-                                TokInfo::Str(&self.src[tok_start + 1..self.pos]),
-                            ),
-                        );
-                        self.advance()?;
-                        tok_start = self.pos;
-                    } else {
-                        self.advance()?;
-                    }
-                }
-                Grammar::InlineComment => {
-                    if self.current() == "\n" {
-                        grammar = Grammar::Main;
-                        self.advance()?;
-                        tok_start = self.pos;
-                    } else {
-                        self.advance()?;
-                    }
-                }
                 Grammar::Main => {
-                    let tok_str = &self.src[tok_start..self.pos];
-                    if tok_str == "--" {
+                    let tok_str = &self.src[pos..end];
+                    if tok_str == "\"" {
+                        grammar = Grammar::Str;
+                    } else if tok_str == "--" {
                         grammar = Grammar::InlineComment;
-                        self.advance()?;
                     } else if tok_str == "/*" {
                         grammar = Grammar::Comment('/');
-                        self.advance()?;
                     } else if tok_str == "(*" {
                         grammar = Grammar::Comment(')');
-                        self.advance()?;
-                    } else if self.current() == "\"" {
-                        tok_start = self.pos;
-                        self.advance()?;
-                        grammar = Grammar::Str;
-                    } else if !self.current().chars().any(char::is_alphanumeric) {
-                        let next = if self.pos + 2 < total_len {
-                            Some(&self.src[self.pos + 1..self.pos + 2])
-                        } else {
-                            None
-                        };
-                        let (kw, _) = self.find_keyword(len, next, tok_str);
-                        let (op, should_reset) = self.find_keyword(1, next, self.current());
-
-                        let mut ch = tok_str.chars();
-                        let is_ident = ch.next().map(char::is_alphabetic).unwrap_or(false)
-                            && ch.all(|x| x.is_alphanumeric() || x == '_');
-
-                        if let Some(kw) = kw {
-                            tokens.push(kw);
-                        } else if let Ok(i) = i64::from_str(tok_str) {
-                            if self.current() != "." {
-                                tokens.push(self.token(len, TokInfo::IConst(i)));
-                            } else {
-                                self.advance()?;
-                                continue;
-                            }
-                        } else if let Ok(r) = f64::from_str(tok_str) {
-                            tokens.push(self.token(len, TokInfo::RConst(r)));
-                        } else if is_ident {
-                            tokens.push(self.token(len, TokInfo::Ident(tok_str)));
-                        }
-
-                        if let Some(op) = op {
-                            tokens.push(op);
-                        }
-                        self.advance()?;
-                        if should_reset {
-                            tok_start = self.pos;
-                        } else {
-                            self.advance()?;
-                        }
                     } else {
-                        self.advance()?;
+                        if let Some(tok) = Self::match_tok(self.file, line, col, pos, tok_str) {
+                            tokens.push(tok);
+                            pos = end;
+                            end = total_len;
+                        } else {
+                            end -= 1;
+                        }
+                    }
+                }
+                Grammar::Str => {
+                    let mut str_end = pos + 1; // TODO -> +1 may overflow => unclosed str
+                    let mut added_lines = 0;
+                    let mut added_cols = 0;
+                    while str_end + 1 < total_len && &self.src[str_end..str_end + 1] != "\"" {
+                        match &self.src[str_end..str_end + 1] {
+                            "\n" => {
+                                added_cols = 0;
+                                added_lines += 1
+                            }
+                            _ => added_cols += 1,
+                        }
+                        str_end += 1;
+                    }
+                    tokens.push(Spanned {
+                        span: Span {
+                            file: self.file,
+                            start: Location {
+                                line,
+                                col,
+                                pos: (pos + 1) as u64,
+                            },
+                            end: Location {
+                                line: line + added_lines,
+                                col: col + added_cols,
+                                pos: str_end as u64,
+                            },
+                        },
+                        item: TokInfo::Str(&self.src[pos + 1..str_end]),
+                    });
+                    pos = str_end + 1;
+                    end = total_len;
+                    line += added_lines;
+                    col += added_cols;
+                    if pos < total_len || &self.src[str_end..str_end + 1] == "\"" {
+                        grammar = Grammar::Main;
                     }
                 }
                 Grammar::Comment(end) => {
-                    if &self.src[self.pos - 2..self.pos - 1] == "*"
-                        && self.src[self.pos - 1..self.pos].chars().next() == Some(end)
+                    let mut comm_end = pos + 1; // TODO -> +1 may overflow => unclosed str
+                    while comm_end + 1 < total_len
+                        && &self.src[comm_end..comm_end + 2] != &format!("*{}", end)
                     {
+                        match &self.src[comm_end..comm_end + 1] {
+                            "\n" => {
+                                col = 0;
+                                line += 1
+                            }
+                            _ => col += 1,
+                        }
+                        comm_end += 1;
+                    }
+                    pos = comm_end + 1;
+                    if pos < total_len {
                         grammar = Grammar::Main;
                     }
-                    self.advance()?;
-                    tok_start = self.pos;
+                }
+                Grammar::InlineComment => {
+                    let mut comm_end = pos + 1; // TODO -> +1 may overflow => unclosed str
+                    while comm_end + 1 < total_len && &self.src[comm_end..comm_end + 1] != "\n" {
+                        match &self.src[comm_end..comm_end + 1] {
+                            "\n" => {
+                                col = 0;
+                                line += 1
+                            }
+                            _ => col += 1,
+                        }
+                        comm_end += 1;
+                    }
+                    pos = comm_end;
+                    grammar = Grammar::Main;
                 }
             }
-        }
 
+            if pos + 1 < total_len {
+                match &self.src[pos..pos + 1] {
+                    "\n" => {
+                        col = 0;
+                        line += 1
+                    }
+                    _ => col += 1,
+                };
+            }
+            if pos >= end {
+                pos += 1;
+                end = total_len;
+            }
+        }
         match grammar {
             Grammar::Main | Grammar::InlineComment => {
-                tokens.push(self.token(0, TokInfo::EOF));
+                tokens.push(Spanned {
+                    span: Span {
+                        file: self.file,
+                        start: Location {
+                            line,
+                            col,
+                            pos: pos as u64,
+                        },
+                        end: Location {
+                            line,
+                            col,
+                            pos: pos as u64,
+                        },
+                    },
+                    item: TokInfo::EOF,
+                });
                 Ok(tokens)
             }
-            Grammar::Str => Err(Error::UnclosedStr),
             Grammar::Comment(_) => Err(Error::UnclosedComment),
+            Grammar::Str => Err(Error::UnclosedStr),
         }
     }
 
-    fn current(&self) -> &'a str {
-        if self.pos < self.src.len() {
-            &self.src[self.pos..self.pos + 1]
-        } else {
-            ""
+    fn match_tok(
+        file: &'f str,
+        line: u64,
+        col: u64,
+        pos: usize,
+        src: &'a str,
+    ) -> Option<Spanned<'f, TokInfo<'a>>> {
+        let len = src.len() as u64;
+        let pos = (pos as u64) + len;
+        let col = col + len;
+        match src {
+            "extern" => Some(Self::token(file, line, col, pos, len, TokInfo::Extern)),
+            "unsafe" => Some(Self::token(file, line, col, pos, len, TokInfo::Unsafe)),
+            "and" => Some(Self::token(file, line, col, pos, len, TokInfo::And)),
+            "assert" => Some(Self::token(file, line, col, pos, len, TokInfo::Assert)),
+            "bool" => Some(Self::token(file, line, col, pos, len, TokInfo::Bool)),
+            "const" => Some(Self::token(file, line, col, pos, len, TokInfo::Const)),
+            "current" => Some(Self::token(file, line, col, pos, len, TokInfo::Current)),
+            "div" => Some(Self::token(file, line, col, pos, len, TokInfo::Div)),
+            "else" => Some(Self::token(file, line, col, pos, len, TokInfo::Else)),
+            "enum" => Some(Self::token(file, line, col, pos, len, TokInfo::Enum)),
+            "function" => Some(Self::token(file, line, col, pos, len, TokInfo::Function)),
+            "false" => Some(Self::token(file, line, col, pos, len, TokInfo::False)),
+            "if" => Some(Self::token(file, line, col, pos, len, TokInfo::If)),
+            "int" => Some(Self::token(file, line, col, pos, len, TokInfo::Int)),
+            "let" => Some(Self::token(file, line, col, pos, len, TokInfo::Let)),
+            "mod" => Some(Self::token(file, line, col, pos, len, TokInfo::Mod)),
+            "node" => Some(Self::token(file, line, col, pos, len, TokInfo::Node)),
+            "not" => Some(Self::token(file, line, col, pos, len, TokInfo::Not)),
+            "operator" => Some(Self::token(file, line, col, pos, len, TokInfo::Operator)),
+            "or" => Some(Self::token(file, line, col, pos, len, TokInfo::Or)),
+            "nor" => Some(Self::token(file, line, col, pos, len, TokInfo::Nor)),
+            "fby" => Some(Self::token(file, line, col, pos, len, TokInfo::FBy)),
+            "pre" => Some(Self::token(file, line, col, pos, len, TokInfo::Pre)),
+            "real" => Some(Self::token(file, line, col, pos, len, TokInfo::Real)),
+            "returns" => Some(Self::token(file, line, col, pos, len, TokInfo::Returns)),
+            "step" => Some(Self::token(file, line, col, pos, len, TokInfo::Step)),
+            "struct" => Some(Self::token(file, line, col, pos, len, TokInfo::Struct)),
+            "tel" => Some(Self::token(file, line, col, pos, len, TokInfo::Tel)),
+            "type" => Some(Self::token(file, line, col, pos, len, TokInfo::Type)),
+            "then" => Some(Self::token(file, line, col, pos, len, TokInfo::Then)),
+            "true" => Some(Self::token(file, line, col, pos, len, TokInfo::True)),
+            "var" => Some(Self::token(file, line, col, pos, len, TokInfo::Var)),
+            "when" => Some(Self::token(file, line, col, pos, len, TokInfo::When)),
+            "with" => Some(Self::token(file, line, col, pos, len, TokInfo::With)),
+            "xor" => Some(Self::token(file, line, col, pos, len, TokInfo::Xor)),
+            "model" => Some(Self::token(file, line, col, pos, len, TokInfo::Model)),
+            "package" => Some(Self::token(file, line, col, pos, len, TokInfo::Package)),
+            "needs" => Some(Self::token(file, line, col, pos, len, TokInfo::Needs)),
+            "provides" => Some(Self::token(file, line, col, pos, len, TokInfo::Provides)),
+            "uses" => Some(Self::token(file, line, col, pos, len, TokInfo::Uses)),
+            "is" => Some(Self::token(file, line, col, pos, len, TokInfo::Is)),
+            "body" => Some(Self::token(file, line, col, pos, len, TokInfo::Body)),
+            "end" => Some(Self::token(file, line, col, pos, len, TokInfo::End)),
+            "include" => Some(Self::token(file, line, col, pos, len, TokInfo::Include)),
+            "merge" => Some(Self::token(file, line, col, pos, len, TokInfo::Merge)),
+            "->" => Some(Self::token(file, line, col, pos, len, TokInfo::Arrow)),
+            "=>" => Some(Self::token(file, line, col, pos, len, TokInfo::Impl)),
+            "<=" => Some(Self::token(file, line, col, pos, len, TokInfo::Lte)),
+            "<>" => Some(Self::token(file, line, col, pos, len, TokInfo::Neq)),
+            ">=" => Some(Self::token(file, line, col, pos, len, TokInfo::Gte)),
+            ".." => Some(Self::token(file, line, col, pos, len, TokInfo::CDots)),
+            "**" => Some(Self::token(file, line, col, pos, len, TokInfo::Power)),
+            "<<" => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::OpenStaticPar,
+            )),
+            ">>" => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::CloseStaticPar,
+            )),
+            "+" => Some(Self::token(file, line, col, pos, len, TokInfo::Plus)),
+            "^" => Some(Self::token(file, line, col, pos, len, TokInfo::Hat)),
+            "#" => Some(Self::token(file, line, col, pos, len, TokInfo::Sharp)),
+            "-" => Some(Self::token(file, line, col, pos, len, TokInfo::Minus)),
+            "/" => Some(Self::token(file, line, col, pos, len, TokInfo::Slash)),
+            "%" => Some(Self::token(file, line, col, pos, len, TokInfo::Percent)),
+            "*" => Some(Self::token(file, line, col, pos, len, TokInfo::Star)),
+            "|" => Some(Self::token(file, line, col, pos, len, TokInfo::Bar)),
+            "=" => Some(Self::token(file, line, col, pos, len, TokInfo::Equal)),
+            "." => Some(Self::token(file, line, col, pos, len, TokInfo::Dot)),
+            "," => Some(Self::token(file, line, col, pos, len, TokInfo::Coma)),
+            ";" => Some(Self::token(file, line, col, pos, len, TokInfo::Semicolon)),
+            ":" => Some(Self::token(file, line, col, pos, len, TokInfo::Colon)),
+            "(" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenPar)),
+            ")" => Some(Self::token(file, line, col, pos, len, TokInfo::ClosePar)),
+            "{" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBrace)),
+            "}" => Some(Self::token(file, line, col, pos, len, TokInfo::CloseBrace)),
+            "[" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBracket)),
+            "]" => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::CloseBracket,
+            )),
+            "<" => Some(Self::token(file, line, col, pos, len, TokInfo::Lt)),
+            ">" => Some(Self::token(file, line, col, pos, len, TokInfo::Gt)),
+            x if x.parse::<i64>().is_ok() => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::IConst(x.parse::<i64>().unwrap()),
+            )),
+            x if x.parse::<f64>().is_ok() => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::RConst(x.parse::<f64>().unwrap()),
+            )),
+            x if x.chars().all(char::is_alphanumeric) => {
+                Some(Self::token(file, line, col, pos, len, TokInfo::Ident(x)))
+            }
+            _ => None,
         }
     }
 
-    fn advance(&mut self) -> Result<(), Error> {
-        let len = self.src.len();
-        if self.pos >= len {
-            return Ok(());
-        }
-
-        if &self.src[self.pos..self.pos + 1] == "\n" {
-            self.line += 1;
-            self.col = 0;
-        } else {
-            self.col += 1;
-        }
-        self.pos += 1;
-        if self.pos <= len {
-            Ok(())
-        } else {
-            Err(Error::UnexpectedEOF)
-        }
-    }
-
-    fn token(&self, len: u64, info: TokInfo<'a>) -> Tok<'a, 'f> {
+    fn token(
+        file: &'f str,
+        line: u64,
+        col: u64,
+        pos: u64,
+        len: u64,
+        info: TokInfo<'a>,
+    ) -> Tok<'a, 'f> {
         Spanned {
             span: Span {
-                file: self.file,
+                file,
                 start: Location {
-                    line: self.line,
-                    col: self.col - len,
-                    pos: (self.pos as u64) - len,
+                    line,
+                    col: col - len,
+                    pos: pos - len,
                 },
-                end: Location {
-                    line: self.line,
-                    col: self.col,
-                    pos: self.pos as u64,
-                },
+                end: Location { line, col, pos },
             },
             item: info,
         }
-    }
-
-    fn find_keyword(
-        &self,
-        len: u64,
-        next: Option<&'a str>,
-        tok_str: &'a str,
-    ) -> (Option<Tok<'a, 'f>>, bool) {
-        let mut should_reset = true;
-        let t = match tok_str {
-            "extern" => Some(self.token(len, TokInfo::Extern)),
-            "unsafe" => Some(self.token(len, TokInfo::Unsafe)),
-            "and" => Some(self.token(len, TokInfo::And)),
-            "assert" => Some(self.token(len, TokInfo::Assert)),
-            "bool" => Some(self.token(len, TokInfo::Bool)),
-            "const" => Some(self.token(len, TokInfo::Const)),
-            "current" => Some(self.token(len, TokInfo::Current)),
-            "div" => Some(self.token(len, TokInfo::Div)),
-            "else" => Some(self.token(len, TokInfo::Else)),
-            "enum" => Some(self.token(len, TokInfo::Enum)),
-            "function" => Some(self.token(len, TokInfo::Function)),
-            "false" => Some(self.token(len, TokInfo::False)),
-            "if" => Some(self.token(len, TokInfo::If)),
-            "int" => Some(self.token(len, TokInfo::Int)),
-            "let" => Some(self.token(len, TokInfo::Let)),
-            "mod" => Some(self.token(len, TokInfo::Mod)),
-            "node" => Some(self.token(len, TokInfo::Node)),
-            "not" => Some(self.token(len, TokInfo::Not)),
-            "operator" => Some(self.token(len, TokInfo::Operator)),
-            "or" => Some(self.token(len, TokInfo::Or)),
-            "nor" => Some(self.token(len, TokInfo::Nor)),
-            "fby" => Some(self.token(len, TokInfo::FBy)),
-            "pre" => Some(self.token(len, TokInfo::Pre)),
-            "real" => Some(self.token(len, TokInfo::Real)),
-            "returns" => Some(self.token(len, TokInfo::Returns)),
-            "step" => Some(self.token(len, TokInfo::Step)),
-            "struct" => Some(self.token(len, TokInfo::Struct)),
-            "tel" => Some(self.token(len, TokInfo::Tel)),
-            "type" => Some(self.token(len, TokInfo::Type)),
-            "then" => Some(self.token(len, TokInfo::Then)),
-            "true" => Some(self.token(len, TokInfo::True)),
-            "var" => Some(self.token(len, TokInfo::Var)),
-            "when" => Some(self.token(len, TokInfo::When)),
-            "with" => Some(self.token(len, TokInfo::With)),
-            "xor" => Some(self.token(len, TokInfo::Xor)),
-            "model" => Some(self.token(len, TokInfo::Model)),
-            "package" => Some(self.token(len, TokInfo::Package)),
-            "needs" => Some(self.token(len, TokInfo::Needs)),
-            "provides" => Some(self.token(len, TokInfo::Provides)),
-            "uses" => Some(self.token(len, TokInfo::Uses)),
-            "is" => Some(self.token(len, TokInfo::Is)),
-            "body" => Some(self.token(len, TokInfo::Body)),
-            "end" => Some(self.token(len, TokInfo::End)),
-            "include" => Some(self.token(len, TokInfo::Include)),
-            "merge" => Some(self.token(len, TokInfo::Merge)),
-            "->" => Some(self.token(len, TokInfo::Arrow)),
-            "=>" => Some(self.token(len, TokInfo::Impl)),
-            "<=" => Some(self.token(len, TokInfo::Lte)),
-            "<>" => Some(self.token(len, TokInfo::Neq)),
-            ">=" => Some(self.token(len, TokInfo::Gte)),
-            ".." => Some(self.token(len, TokInfo::CDots)),
-            "**" => Some(self.token(len, TokInfo::Power)),
-            "<<" => Some(self.token(len, TokInfo::OpenStaticPar)),
-            ">>" => Some(self.token(len, TokInfo::CloseStaticPar)),
-            "+" => Some(self.token(len, TokInfo::Plus)),
-            "^" => Some(self.token(len, TokInfo::Hat)),
-            "#" => Some(self.token(len, TokInfo::Sharp)),
-            "-" => {
-                if next != Some("-") {
-                    Some(self.token(len, TokInfo::Minus))
-                } else {
-                    should_reset = false;
-                    None
-                }
-            }
-            "/" => {
-                if next != Some("*") {
-                    Some(self.token(len, TokInfo::Slash))
-                } else {
-                    should_reset = false;
-                    None
-                }
-            }
-            "%" => Some(self.token(len, TokInfo::Percent)),
-            "*" => Some(self.token(len, TokInfo::Star)),
-            "|" => Some(self.token(len, TokInfo::Bar)),
-            "=" => Some(self.token(len, TokInfo::Equal)),
-            "." => {
-                if next
-                    .map(|x| x.chars().all(char::is_numeric))
-                    .unwrap_or(false)
-                {
-                    should_reset = false;
-                    None
-                } else {
-                    Some(self.token(len, TokInfo::Dot))
-                }
-            }
-            "," => Some(self.token(len, TokInfo::Coma)),
-            ";" => Some(self.token(len, TokInfo::Semicolon)),
-            ":" => Some(self.token(len, TokInfo::Colon)),
-            "(" => {
-                if next != Some("*") {
-                    Some(self.token(len, TokInfo::OpenPar))
-                } else {
-                    should_reset = false;
-                    None
-                }
-            }
-            ")" => Some(self.token(len, TokInfo::ClosePar)),
-            "{" => Some(self.token(len, TokInfo::OpenBrace)),
-            "}" => Some(self.token(len, TokInfo::CloseBrace)),
-            "[" => Some(self.token(len, TokInfo::OpenBracket)),
-            "]" => Some(self.token(len, TokInfo::CloseBracket)),
-            "<" => Some(self.token(len, TokInfo::Lt)),
-            ">" => Some(self.token(len, TokInfo::Gt)),
-            _ => None,
-        };
-        (t, should_reset)
     }
 }
 
@@ -465,12 +469,7 @@ mod tests {
     fn test_iconst() {
         test_lexer(
             "42 -12",
-            vec![
-                TokInfo::IConst(42),
-                TokInfo::Minus,
-                TokInfo::IConst(12),
-                TokInfo::EOF,
-            ],
+            vec![TokInfo::IConst(42), TokInfo::IConst(-12), TokInfo::EOF],
         )
     }
 
@@ -524,5 +523,45 @@ mod tests {
                 TokInfo::EOF,
             ],
         );
+    }
+
+    #[test]
+    fn test_ident() {
+        test_lexer(
+            "a aaaa",
+            vec![TokInfo::Ident("a"), TokInfo::Ident("aaaa"), TokInfo::EOF],
+        )
+    }
+
+    #[test]
+    fn test_static_pars() {
+        test_lexer(
+            "function a<<const n : int>>()",
+            vec![
+                TokInfo::Function,
+                TokInfo::Ident("a"),
+                TokInfo::OpenStaticPar,
+                TokInfo::Const,
+                TokInfo::Ident("n"),
+                TokInfo::Colon,
+                TokInfo::Int,
+                TokInfo::CloseStaticPar,
+                TokInfo::OpenPar,
+                TokInfo::ClosePar,
+                TokInfo::EOF,
+            ],
+        )
+    }
+
+    #[test]
+    fn test_unclosed_str() {
+        let mut lexer = Lexer::new("main.lus", "\"hello ");
+        assert_eq!(lexer.lex(), Err(Error::UnclosedStr));
+    }
+
+    #[test]
+    fn test_unclosed_comment() {
+        let mut lexer = Lexer::new("main.lus", "/* hello ");
+        assert_eq!(lexer.lex(), Err(Error::UnclosedComment));
     }
 }
