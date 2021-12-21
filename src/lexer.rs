@@ -23,6 +23,7 @@ pub enum TokInfo<'a> {
     Current,
     Sharp,
     Div,
+    DoubleColon,
     Dot,
     Equal,
     Else,
@@ -271,6 +272,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
         match src {
             "," => Some(Self::token(file, line, col, pos, len, TokInfo::Coma)),
             ";" => Some(Self::token(file, line, col, pos, len, TokInfo::Semicolon)),
+            "::" => Some(Self::token(file, line, col, pos, len, TokInfo::DoubleColon)),
             ":" => Some(Self::token(file, line, col, pos, len, TokInfo::Colon)),
             "->" => Some(Self::token(file, line, col, pos, len, TokInfo::Arrow)),
             "=>" => Some(Self::token(file, line, col, pos, len, TokInfo::Impl)),

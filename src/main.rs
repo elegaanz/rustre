@@ -50,7 +50,12 @@ fn print_err<'a, 'f>(err: parser::Error<'a, 'f>, contents: &'a str) {
             let start = span.start.pos as usize;
             let end = span.end.pos as usize;
             Report::build(ReportKind::Error, path.to_owned(), start)
-                .with_message("Unexpected token")
+                .with_message(format!(
+                    "Unexpected token {}",
+                    toks.get(0)
+                        .map(|t| format!("{:?}", t.item))
+                        .unwrap_or_default(),
+                ))
                 .with_label(Label::new((path.to_owned(), start..end)).with_message(exp))
                 .finish()
                 .print(ariadne::sources(vec![(path.to_owned(), contents)]))

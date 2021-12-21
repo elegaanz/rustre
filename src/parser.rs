@@ -20,17 +20,17 @@ pub struct Ast<'a, 'f> {
 #[derive(Debug)]
 pub enum Decl<'a, 'f> {
     Const {
-        name: &'a str,
+        name: Ident<'a, 'f>,
         /// May be None for external constants
         value: Option<Spanned<'f, Expr<'a, 'f>>>,
-        ty: Option<&'a str>,
+        ty: Option<Ty<'a, 'f>>,
     },
     Ty,
     ExtNode,
     Node {
         is_unsafe: bool,
         is_function: bool,
-        name: Spanned<'f, &'a str>,
+        name: Spanned<'f, Ident<'a, 'f>>,
         static_params: Vec<Spanned<'f, StaticParamDecl<'a, 'f>>>,
         params: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
         outputs: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
@@ -40,27 +40,27 @@ pub enum Decl<'a, 'f> {
     AliasNode {
         is_unsafe: bool,
         is_function: bool,
-        name: Spanned<'f, &'a str>,
+        name: Spanned<'f, Ident<'a, 'f>>,
         static_params: Vec<Spanned<'f, StaticParamDecl<'a, 'f>>>,
         params: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
         outputs: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
-        effective_node: Spanned<'f, (Spanned<'f, &'a str>, Vec<Spanned<'f, Expr<'a, 'f>>>)>,
+        effective_node: Spanned<'f, (Spanned<'f, Ident<'a, 'f>>, Vec<Spanned<'f, Expr<'a, 'f>>>)>,
     },
 }
 
 #[derive(Debug)]
 pub enum StaticParamDecl<'a, 'f> {
     Const {
-        name: Spanned<'f, &'a str>,
+        name: Spanned<'f, Ident<'a, 'f>>,
         ty: Spanned<'f, Ty<'a, 'f>>,
     },
     Ty {
-        name: Spanned<'f, &'a str>,
+        name: Spanned<'f, Ident<'a, 'f>>,
     },
     Node {
         is_unsafe: bool,
         is_function: bool,
-        name: Spanned<'f, &'a str>,
+        name: Spanned<'f, Ident<'a, 'f>>,
         params: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
         outputs: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
     },
@@ -72,7 +72,7 @@ pub struct Variable<'a, 'f> {
 }
 #[derive(Clone, Debug)]
 pub struct VariableDecl<'a, 'f> {
-    name: Spanned<'f, &'a str>,
+    name: Spanned<'f, Ident<'a, 'f>>,
     ty: Spanned<'f, Ty<'a, 'f>>,
 }
 
@@ -99,7 +99,7 @@ pub enum ConstValue {
 #[derive(Clone, Debug)]
 pub enum Expr<'a, 'f> {
     Const(ConstValue),
-    Ident(&'a str),
+    Ident(Ident<'a, 'f>),
     Unary(Spanned<'f, UnaryOp>, Spanned<'f, Box<Expr<'a, 'f>>>),
     Binary(
         Spanned<'f, BinaryOp>,
@@ -118,10 +118,10 @@ pub enum Expr<'a, 'f> {
         then: Spanned<'f, Box<Expr<'a, 'f>>>,
         otherwise: Spanned<'f, Box<Expr<'a, 'f>>>,
     },
-    StructAccess(Spanned<'f, Box<Expr<'a, 'f>>>, &'a str),
-    NamedClock(Spanned<'f, &'a str>, Box<Option<Spanned<'f, &'a str>>>),
+    StructAccess(Spanned<'f, Box<Expr<'a, 'f>>>, Ident<'a, 'f>),
+    NamedClock(Spanned<'f, Ident<'a, 'f>>, Box<Option<Spanned<'f, Ident<'a, 'f>>>>),
     CallByName(
-        Spanned<'f, &'a str>,
+        Spanned<'f, Ident<'a, 'f>>,
         Vec<Spanned<'f, Expr<'a, 'f>>>,
         Vec<Spanned<'f, Expr<'a, 'f>>>,
     ),
@@ -189,8 +189,8 @@ pub enum BodyItem<'a, 'f> {
 
 #[derive(Debug)]
 pub enum LeftItem<'a, 'f> {
-    Ident(Spanned<'f, &'a str>),
-    Field(Box<Spanned<'f, LeftItem<'a, 'f>>>, Spanned<'f, &'a str>),
+    Ident(Spanned<'f, Ident<'a, 'f>>),
+    Field(Box<Spanned<'f, LeftItem<'a, 'f>>>, Spanned<'f, Ident<'a, 'f>>),
     TableIndex(
         Box<Spanned<'f, LeftItem<'a, 'f>>>,
         Spanned<'f, Expr<'a, 'f>>,
@@ -200,6 +200,12 @@ pub enum LeftItem<'a, 'f> {
         Spanned<'f, Expr<'a, 'f>>,
         Spanned<'f, Expr<'a, 'f>>,
     ),
+}
+
+#[derive(Clone, Debug)]
+pub enum Ident<'a, 'f> {
+    Short { id: Spanned<'f, &'a str>, pragma: Option<(&'a str, &'a str)> },
+    Long(Spanned<'f, &'a str>, Box<Ident<'a, 'f>>),
 }
 
 type Res<'a, 'f, T> = Result<(&'a [Tok<'a, 'f>], T), Error<'a, 'f>>;
@@ -533,9 +539,9 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
 
         let ty = if self.expect(toks, TokInfo::Colon, "expected :").is_ok() {
-            let (t, id) = self.parse_id(&toks[1..])?;
+            let (t, ty) = self.parse_ty(&toks[1..])?;
             toks = t;
-            Some(id)
+            Some(ty)
         } else {
             None
         };
@@ -559,8 +565,8 @@ impl<'a, 'f> Parser<'a, 'f> {
                         kw,
                         &i,
                         Decl::Const {
-                            name: i.item,
-                            ty,
+                            name: i.item.clone(),
+                            ty: ty.clone(),
                             value: expr.clone(),
                         },
                     )
@@ -569,9 +575,8 @@ impl<'a, 'f> Parser<'a, 'f> {
         ))
     }
 
-    fn parse_id(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, &'a str> {
-        // TODO: long ids
-        match toks.get(0) {
+    fn parse_id(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Ident<'a, 'f>> {
+        let id = match toks.get(0) {
             Some(
                 tok
                 @
@@ -579,14 +584,21 @@ impl<'a, 'f> Parser<'a, 'f> {
                     item: TokInfo::Ident(x),
                     ..
                 },
-            ) => Ok((
-                &toks[1..],
-                Spanned {
-                    span: tok.span.clone(),
-                    item: x,
-                },
-            )),
-            _ => Err(Error::UnexpectedToken(&toks, "expected an identifier")),
+            ) => Spanned {
+                span: tok.span.clone(),
+                item: *x
+            },
+            _ => return Err(Error::UnexpectedToken(&toks, "expected an identifier")),
+        };
+        if self.expect(&toks[1..], TokInfo::DoubleColon, "::").is_ok() {
+            let (toks, next) = self.parse_id(&toks[2..])?;
+            Ok((toks, Spanned::fusion(
+                id.span.clone(),
+                next.span.clone(),
+                Ident::Long(id, Box::new(next.item)),
+            )))
+        } else {
+            Ok((&toks[1..], id.clone().map(|_| Ident::Short { id, pragma: None }, /* TODO: pragma */)))
         }
     }
 
@@ -1006,7 +1018,7 @@ impl<'a, 'f> Parser<'a, 'f> {
             };
 
             let (toks, vars) = if self.expect(toks, TokInfo::Var, "var").is_ok() {
-                self.parse_var_decl(&toks[1..], false)?
+                self.parse_var_decl(&toks[1..], true)? // FIXME: the final semicolon is not optional
             } else {
                 (toks, vec![])
             };
