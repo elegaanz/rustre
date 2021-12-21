@@ -56,6 +56,6 @@ fn print_err<'a, 'f>(err: parser::Error<'a, 'f>, contents: &'a str) {
                 .print(ariadne::sources(vec![(path.to_owned(), contents)]))
                 .unwrap();
         }
-        e => println!("Error: {:?}", e),
+        parser::Error::ReportedError => {}
     }
 }

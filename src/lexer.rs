@@ -139,6 +139,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     } else {
                         if let Some(tok) = Self::match_tok(self.file, line, col, pos, tok_str) {
                             tokens.push(tok);
+                            col += (end - pos) as u64;
                             pos = end;
                             end = self.find_next_delimiter(pos);
                         } else {
@@ -148,15 +149,15 @@ impl<'a, 'f> Lexer<'a, 'f> {
                 }
                 Grammar::Str => {
                     let mut str_end = pos + 1;
-                    let mut added_lines = 0;
-                    let mut added_cols = 0;
+                    let original_line = line;
+                    let original_col = col;
                     while str_end + 1 < total_len && &self.src[str_end..str_end + 1] != "\"" {
                         match &self.src[str_end..str_end + 1] {
                             "\n" => {
-                                added_cols = 0;
-                                added_lines += 1
+                                col = 0;
+                                line += 1
                             }
-                            _ => added_cols += 1,
+                            _ => col += 1,
                         }
                         str_end += 1;
                     }
@@ -164,13 +165,13 @@ impl<'a, 'f> Lexer<'a, 'f> {
                         span: Span {
                             file: self.file,
                             start: Location {
-                                line,
-                                col,
+                                line: original_line,
+                                col: original_col,
                                 pos: (pos + 1) as u64,
                             },
                             end: Location {
-                                line: line + added_lines,
-                                col: col + added_cols,
+                                line,
+                                col,
                                 pos: str_end as u64,
                             },
                         },
@@ -178,8 +179,6 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     });
                     pos = str_end + 1;
                     end = self.find_next_delimiter(pos);
-                    line += added_lines;
-                    col += added_cols;
                     if pos < total_len || &self.src[str_end..str_end + 1] == "\"" {
                         grammar = Grammar::Main;
                     }
@@ -220,16 +219,16 @@ impl<'a, 'f> Lexer<'a, 'f> {
                 }
             }
 
-            if pos + 1 < total_len {
-                match &self.src[pos..pos + 1] {
-                    "\n" => {
-                        col = 0;
-                        line += 1
-                    }
-                    _ => col += 1,
-                };
-            }
             if pos >= end {
+                if pos + 1 < total_len {
+                    match &self.src[pos..pos + 1] {
+                        "\n" => {
+                            col = 0;
+                            line += 1
+                        }
+                        _ => col += 1,
+                    };
+                }
                 pos += 1;
                 end = total_len;
             }
@@ -366,21 +365,17 @@ impl<'a, 'f> Lexer<'a, 'f> {
             "end" => Some(Self::token(file, line, col, pos, len, TokInfo::End)),
             "include" => Some(Self::token(file, line, col, pos, len, TokInfo::Include)),
             "merge" => Some(Self::token(file, line, col, pos, len, TokInfo::Merge)),
-            x if x.chars().all(|c| c.is_numeric() || c == '-')
-                && x.chars().any(char::is_numeric) =>
-            {
-                Some(Self::token(
-                    file,
-                    line,
-                    col,
-                    pos,
-                    len,
-                    TokInfo::IConst(x.parse::<i64>().unwrap()),
-                ))
-            }
+            x if x.chars().all(char::is_numeric) => Some(Self::token(
+                file,
+                line,
+                col,
+                pos,
+                len,
+                TokInfo::IConst(x.parse::<i64>().unwrap()),
+            )),
             x if x
                 .chars()
-                .all(|c| c.is_numeric() || c == '.' || c == '-' || c == 'e' || c == 'E')
+                .all(|c| c.is_numeric() || c == '.' || c == 'e' || c == 'E')
                 && x.chars().any(char::is_numeric)
                 && x.parse::<f64>().is_ok() =>
             {
@@ -432,7 +427,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     return pos + pat_pos + pat.len();
                 }
                 if pat_pos + pat.len() < delim {
-                    delim = pat_pos + pat.len();
+                    delim = pos + pat_pos + pat.len();
                 }
             }
         }
@@ -501,7 +496,12 @@ mod tests {
     fn test_iconst() {
         test_lexer(
             "42 -12",
-            vec![TokInfo::IConst(42), TokInfo::IConst(-12), TokInfo::EOF],
+            vec![
+                TokInfo::IConst(42),
+                TokInfo::Minus,
+                TokInfo::IConst(12),
+                TokInfo::EOF,
+            ],
         )
     }
 
@@ -582,6 +582,24 @@ mod tests {
                 TokInfo::ClosePar,
                 TokInfo::EOF,
             ],
+        );
+        test_lexer(
+            "x + amaury_n<<n-1>>(x);",
+            vec![
+                TokInfo::Ident("x"),
+                TokInfo::Plus,
+                TokInfo::Ident("amaury_n"),
+                TokInfo::OpenStaticPar,
+                TokInfo::Ident("n"),
+                TokInfo::Minus,
+                TokInfo::IConst(1),
+                TokInfo::CloseStaticPar,
+                TokInfo::OpenPar,
+                TokInfo::Ident("x"),
+                TokInfo::ClosePar,
+                TokInfo::Semicolon,
+                TokInfo::EOF,
+            ],
         )
     }
 
@@ -595,5 +613,106 @@ mod tests {
     fn test_unclosed_comment() {
         let mut lexer = Lexer::new("main.lus", "/* hello ");
         assert_eq!(lexer.lex(), Err(Error::UnclosedComment));
+    }
+
+    #[test]
+    fn test_amaury() {
+        use TokInfo::*;
+        let amaury1 = r#"y = with n = 0 then 0 else
+         x + amaury_n<<n-1>>(x);"#;
+        test_lexer(
+            amaury1,
+            vec![
+                Ident("y"),
+                Equal,
+                With,
+                Ident("n"),
+                Equal,
+                IConst(0),
+                Then,
+                IConst(0),
+                Else,
+                Ident("x"),
+                Plus,
+                Ident("amaury_n"),
+                OpenStaticPar,
+                Ident("n"),
+                Minus,
+                IConst(1),
+                CloseStaticPar,
+                OpenPar,
+                Ident("x"),
+                ClosePar,
+                Semicolon,
+                EOF,
+            ],
+        );
+
+        let amaury = r#"
+node amaury_n<<const n:int>>(x: int) returns (y:int);
+let
+   y = with n = 0 then 0 else
+         x + amaury_n<<n-1>>(x);
+tel
+
+node amaury = amaury_n<<4>>;
+"#;
+        test_lexer(
+            amaury,
+            vec![
+                Node,
+                Ident("amaury_n"),
+                OpenStaticPar,
+                Const,
+                Ident("n"),
+                Colon,
+                Int,
+                CloseStaticPar,
+                OpenPar,
+                Ident("x"),
+                Colon,
+                Int,
+                ClosePar,
+                Returns,
+                OpenPar,
+                Ident("y"),
+                Colon,
+                Int,
+                ClosePar,
+                Semicolon,
+                Let,
+                Ident("y"),
+                Equal,
+                With,
+                Ident("n"),
+                Equal,
+                IConst(0),
+                Then,
+                IConst(0),
+                Else,
+                Ident("x"),
+                Plus,
+                Ident("amaury_n"),
+                OpenStaticPar,
+                Ident("n"),
+                Minus,
+                IConst(1),
+                CloseStaticPar,
+                OpenPar,
+                Ident("x"),
+                ClosePar,
+                Semicolon,
+                Tel,
+                Node,
+                Ident("amaury"),
+                Equal,
+                Ident("amaury_n"),
+                OpenStaticPar,
+                IConst(4),
+                CloseStaticPar,
+                Semicolon,
+                EOF,
+            ],
+        );
     }
 }
