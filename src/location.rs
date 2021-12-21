@@ -71,3 +71,29 @@ impl<'f, T: std::fmt::Debug> Spanned<'f, T> {
         Self { span, item }
     }
 }
+
+impl<'f, T> Spanned<'f, T> {
+    pub fn boxed(self) -> Spanned<'f, Box<T>> {
+        self.map(Box::new)
+    }
+
+    pub fn map_ref<F, U>(&self, f: F) -> Spanned<'f, U>
+    where
+        F: Fn(&T) -> U,
+    {
+        Spanned {
+            span: self.span.clone(),
+            item: f(&self.item),
+        }
+    }
+
+    pub fn map<F, U>(self, f: F) -> Spanned<'f, U>
+    where
+        F: FnOnce(T) -> U,
+    {
+        Spanned {
+            span: self.span,
+            item: f(self.item),
+        }
+    }
+}

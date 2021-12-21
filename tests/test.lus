@@ -6,9 +6,17 @@ const f = 33.3;
 
 function a = b;
 
+function c() returns (x : int)
+let
+    x = 42 * 7 + 3;
+tel;
+
 function b(x : int; z : bool^4) returns (y : int)
 let
     y = x + 12;
 tel;
 
 function generic<<const n : int; function a (k : int) returns (j : int)>>() returns (b : int)
+let
+
+tel

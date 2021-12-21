@@ -381,7 +381,8 @@ impl<'a, 'f> Lexer<'a, 'f> {
             x if x
                 .chars()
                 .all(|c| c.is_numeric() || c == '.' || c == '-' || c == 'e' || c == 'E')
-                && x.chars().any(char::is_numeric) =>
+                && x.chars().any(char::is_numeric)
+                && x.parse::<f64>().is_ok() =>
             {
                 Some(Self::token(
                     file,
