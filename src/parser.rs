@@ -190,6 +190,7 @@ pub enum BodyItem<'a, 'f> {
 #[derive(Debug)]
 pub enum LeftItem<'a, 'f> {
     Ident(Spanned<'f, Ident<'a, 'f>>),
+    Tuple(Spanned<'f, Vec<LeftItem<'a, 'f>>>),
     Field(Box<Spanned<'f, LeftItem<'a, 'f>>>, Spanned<'f, Ident<'a, 'f>>),
     TableIndex(
         Box<Spanned<'f, LeftItem<'a, 'f>>>,
@@ -1242,11 +1243,31 @@ impl<'a, 'f> Parser<'a, 'f> {
 
     fn parse_left_item(
         &mut self,
-        t: &'a [Spanned<'f, TokInfo<'a>>],
+        toks: &'a [Spanned<'f, TokInfo<'a>>],
     ) -> SpannedRes<'a, 'f, LeftItem<'a, 'f>> {
         // TODO
-        let (t, name) = self.parse_id(t)?;
-        Ok((t, name.clone().map(|_| LeftItem::Ident(name))))
+        if self.expect(toks, TokInfo::OpenPar, "(").is_ok() {
+            // TODO: i think the parenthesis are actually optional
+            let (toks, items) = self.parse_many(
+                &toks[1..],
+                Some(TokInfo::Coma),
+                |s, t| s.expect(t, TokInfo::ClosePar, ")").is_ok(),
+                |s, t| {
+                    let (toks, inner) = s.parse_left_item(t)?;
+                    Ok((toks, vec![inner]))
+                },
+            )?;
+            let spanned_item = Spanned::fusion(
+                items[0].span.clone(),
+                toks[0].span.clone(),
+                items.into_iter().map(|i| i.item).collect(),
+            );
+            self.expect(toks, TokInfo::ClosePar, ")")?;
+            Ok((&toks[1..], Spanned { span: spanned_item.span.clone(), item: LeftItem::Tuple(spanned_item) }))
+        } else {
+            let (t, name) = self.parse_id(toks)?;
+            Ok((t, name.clone().map(|_| LeftItem::Ident(name))))
+        }
     }
 
     fn parse_left_items(
