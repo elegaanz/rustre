@@ -25,7 +25,10 @@ pub enum Decl<'a, 'f> {
         value: Option<Spanned<'f, Expr<'a, 'f>>>,
         ty: Option<Ty<'a, 'f>>,
     },
-    Ty,
+    Ty {
+        name: Spanned<'f, Ident<'a, 'f>>,
+        value: Spanned<'f, Ty<'a, 'f>>,
+    },
     ExtNode,
     Node {
         is_unsafe: bool,
@@ -79,14 +82,15 @@ pub struct VariableDecl<'a, 'f> {
 #[derive(Clone, Debug)]
 pub struct Ty<'a, 'f> {
     len: Option<Spanned<'f, Expr<'a, 'f>>>,
-    base: BaseTy,
+    base: BaseTy<'a, 'f>,
 }
 
 #[derive(Clone, Debug)]
-pub enum BaseTy {
+pub enum BaseTy<'a, 'f> {
     Bool,
     Int,
     Real,
+    Named(Ident<'a, 'f>),
 }
 
 #[derive(Clone, Debug)]
@@ -519,7 +523,8 @@ impl<'a, 'f> Parser<'a, 'f> {
             |_, _| false,
             |s, t| {
                 s.parse_const_decl(t)
-                    .or_else(|_| s.parse_local_node_decl(t))
+                    .or_else(|e| choose_err(e, s.parse_local_node_decl(t)))
+                    .or_else(|e| choose_err(e, s.parse_type_decl(t)))
             },
         )
     }
@@ -576,6 +581,19 @@ impl<'a, 'f> Parser<'a, 'f> {
         ))
     }
 
+    fn parse_type_decl(
+        &mut self, toks: &'a [Tok<'a, 'f>]
+    ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a, 'f>>>> {
+        let start = toks[0].span.clone();
+        self.expect(toks, TokInfo::Type, "expected type")?;
+        let (toks, name) = self.parse_id(&toks[1..])?;
+        self.expect(toks, TokInfo::Equal, "expected =")?;
+        let (toks, ty) = self.parse_ty(&toks[1..])?;
+        self.expect(toks, TokInfo::Semicolon, "expected ;")?;
+        Ok((&toks[1..], vec![Spanned::fusion(start, toks[0].span.clone(), Decl::Ty { name, value: ty })]))
+    }
+
+    #[track_caller]
     fn parse_id(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Ident<'a, 'f>> {
         let id = match toks.get(0) {
             Some(
@@ -589,7 +607,10 @@ impl<'a, 'f> Parser<'a, 'f> {
                 span: tok.span.clone(),
                 item: *x
             },
-            _ => return Err(Error::UnexpectedToken(&toks, "expected an identifier")),
+            _ => return Err(Error::UnexpectedToken(
+                &toks,
+                Box::leak(format!("expected an identifier (line {})", std::panic::Location::caller().line()).into_boxed_str())
+            )),
         };
         if self.expect(&toks[1..], TokInfo::DoubleColon, "::").is_ok() {
             let (toks, next) = self.parse_id(&toks[2..])?;
@@ -1115,23 +1136,23 @@ impl<'a, 'f> Parser<'a, 'f> {
     }
 
     fn parse_ty(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Ty<'a, 'f>> {
-        // TODO: handle named types
         let start = toks[0].span.clone();
-        let base = if self.expect(toks, TokInfo::Int, "int").is_ok() {
-            BaseTy::Int
+        let (toks, base) = if self.expect(toks, TokInfo::Int, "int").is_ok() {
+            (&toks[1..], BaseTy::Int)
         } else if self.expect(toks, TokInfo::Real, "real").is_ok() {
-            BaseTy::Real
+            (&toks[1..], BaseTy::Real)
         } else if self.expect(toks, TokInfo::Bool, "bool").is_ok() {
-            BaseTy::Bool
+            (&toks[1..], BaseTy::Bool)
         } else {
-            return Err(Error::UnexpectedToken(toks, "expected int, bool or real"));
+            let (toks, name) = self.parse_id(toks)?;
+            (toks, BaseTy::Named(name.item))
         };
-        let (toks, len, end) = if self.expect(&toks[1..], TokInfo::Hat, "^").is_ok() {
-            let (t, l) = self.parse_expr(&toks[2..])?;
+        let (toks, len, end) = if self.expect(toks, TokInfo::Hat, "^").is_ok() {
+            let (t, l) = self.parse_expr(&toks[1..])?;
             let end = l.span.clone();
             (t, Some(l), end)
         } else {
-            (&toks[1..], None, start.clone())
+            (toks, None, toks[0].span.clone())
         };
 
         Ok((toks, Spanned::fusion(start, end, Ty { base, len })))
@@ -1285,5 +1306,20 @@ impl<'a, 'f> Parser<'a, 'f> {
                 Ok((t, vec![item]))
             },
         )
+    }
+}
+
+fn choose_err<'a, 'f, T>(err: Error<'a, 'f>, res: Result<T, Error<'a, 'f>>) -> Result<T, Error<'a, 'f>> {
+    match (err, res) {
+        (_, Ok(x)) => Ok(x),
+        (Error::UnexpectedToken(toks1, msg1), Err(Error::UnexpectedToken(toks2, msg2))) => {
+            if toks1.len() < toks2.len() {
+                Err(Error::UnexpectedToken(toks1, msg1))
+            } else {
+                Err(Error::UnexpectedToken(toks2, msg2))
+            }
+        },
+        (e @ Error::UnexpectedToken(_, _), _) | (_, Err(e @ Error::UnexpectedToken(_, _))) => Err(e),
+        (e, _) => Err(e),
     }
 }
