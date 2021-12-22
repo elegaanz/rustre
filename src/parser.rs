@@ -645,6 +645,14 @@ impl<'a, 'f> Parser<'a, 'f> {
                 span: tok.span.clone(),
                 item: *x,
             },
+            // TODO: check exhaustiveness
+            // TODO: maybe they are actually accepted only when fully qualified (e.g Lustre::and,
+            // not just and)
+            Some(Spanned { item: TokInfo::And, span }) => Spanned { span: span.clone(), item: "and" },
+            Some(Spanned { item: TokInfo::Or, span }) => Spanned { span: span.clone(), item: "or" },
+            Some(Spanned { item: TokInfo::Xor, span }) => Spanned { span: span.clone(), item: "xor" },
+            Some(Spanned { item: TokInfo::Nor, span }) => Spanned { span: span.clone(), item: "nor" },
+            Some(Spanned { item: TokInfo::Not, span }) => Spanned { span: span.clone(), item: "not" },
             _ => {
                 return Err(Error::UnexpectedToken(
                     &toks,
