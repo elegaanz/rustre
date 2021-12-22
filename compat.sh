@@ -10,7 +10,7 @@ echo
 echo "=== Should work ==="
 echo
 
-for f in $LUSTRE_DIR/test/should_work/*; do
+for f in $(find $LUSTRE_DIR/test/should_work/ -type f); do
     ((tot=$tot+1))
     (./target/release/lustrs $f | rg 'Parsing: OK') &> /dev/null
     if [ $? -eq 1 ]; then
@@ -25,13 +25,13 @@ echo
 echo "=== Should fail ==="
 echo
 
-for f in $LUSTRE_DIR/test/should_fail/*; do
+for f in $(find $LUSTRE_DIR/test/should_fail/ -type f); do
     (./target/release/lustrs $f | rg 'Partial AST') &> /dev/null
     ((tot=$tot+1))
     if [ $? -eq 1 ]; then
-        ((ok=$ok+1))
         echo "[FAIL] $f"
     else
+        ((ok=$ok+1))
         echo "[ OK ] $f"
     fi
 done

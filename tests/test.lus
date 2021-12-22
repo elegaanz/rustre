@@ -18,5 +18,7 @@ tel;
 
 function generic<<const n : int; function a (k : int) returns (j : int)>>() returns (b : int)
 let
-
+    a = #(a, b, c);
+    b = a xor b xor c;
+    c = nor(a, b, c);
 tel
