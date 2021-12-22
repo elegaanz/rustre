@@ -23,11 +23,11 @@ pub enum Decl<'a, 'f> {
         name: Ident<'a, 'f>,
         /// May be None for external constants
         value: Option<Spanned<'f, Expr<'a, 'f>>>,
-        ty: Option<Ty<'a, 'f>>,
+        ty: Option<TyExpr<'a, 'f>>,
     },
     Ty {
         name: Spanned<'f, Ident<'a, 'f>>,
-        value: Spanned<'f, Ty<'a, 'f>>,
+        value: Spanned<'f, TyDecl<'a, 'f>>,
     },
     ExternalNode {
         is_unsafe: bool,
@@ -62,7 +62,7 @@ pub enum Decl<'a, 'f> {
 pub enum StaticArg<'a, 'f> {
     Expr(Spanned<'f, Expr<'a, 'f>>),
     Predefined(Spanned<'f, PredefinedItem>),
-    Ty(Spanned<'f, Ty<'a, 'f>>),
+    Ty(Spanned<'f, TyExpr<'a, 'f>>),
     Node(Spanned<'f, Ident<'a, 'f>>, Vec<StaticArg<'a, 'f>>),
 }
 
@@ -80,7 +80,7 @@ pub enum PredefinedItem {
 pub enum StaticParamDecl<'a, 'f> {
     Const {
         name: Spanned<'f, Ident<'a, 'f>>,
-        ty: Spanned<'f, Ty<'a, 'f>>,
+        ty: Spanned<'f, TyExpr<'a, 'f>>,
     },
     Ty {
         name: Spanned<'f, Ident<'a, 'f>>,
@@ -101,21 +101,24 @@ pub struct Variable<'a, 'f> {
 #[derive(Clone, Debug)]
 pub struct VariableDecl<'a, 'f> {
     name: Spanned<'f, Ident<'a, 'f>>,
-    ty: Spanned<'f, Ty<'a, 'f>>,
+    ty: Spanned<'f, TyExpr<'a, 'f>>,
 }
 
 #[derive(Clone, Debug)]
-pub struct Ty<'a, 'f> {
-    len: Option<Spanned<'f, Expr<'a, 'f>>>,
-    base: BaseTy<'a, 'f>,
-}
-
-#[derive(Clone, Debug)]
-pub enum BaseTy<'a, 'f> {
-    Bool,
+pub enum TyExpr<'a, 'f> {
     Int,
+    Bool,
     Real,
     Named(Ident<'a, 'f>),
+    Power(Spanned<'f, Box<TyExpr<'a, 'f>>>, Spanned<'f, Expr<'a, 'f>>),
+}
+
+#[derive(Clone, Debug)]
+pub enum TyDecl<'a, 'f> {
+    External,
+    Alias(TyExpr<'a, 'f>),
+    Enum(Vec<Spanned<'f, Ident<'a, 'f>>>),
+    Struct(Vec<Spanned<'f, (Ident<'a, 'f>, TyExpr<'a, 'f>)>>),
 }
 
 #[derive(Clone, Debug)]
@@ -615,9 +618,8 @@ impl<'a, 'f> Parser<'a, 'f> {
                     toks
                 };
 
-                dbg!(&t[..3]);
                 let (t, ty) = if s.expect(t, TokInfo::Colon, "expected :").is_ok() {
-                    let (t, ty) = s.parse_ty(&t[1..])?;
+                    let (t, ty) = s.parse_ty_expr(&t[1..])?;
                     (t, Some(ty))
                 } else {
                     (t, None)
@@ -669,16 +671,20 @@ impl<'a, 'f> Parser<'a, 'f> {
             |s, t| {
                 let start = t[0].span.clone();
                 let (t, name) = s.parse_id(t)?;
-                s.expect(t, TokInfo::Equal, "expected =")?;
-                let (t, ty) = s.parse_ty(&t[1..])?;
-                Ok((
-                    t,
-                    vec![Spanned::fusion(
-                        start,
-                        t[0].span.clone(),
-                        Decl::Ty { name, value: ty },
-                    )],
-                ))
+                // TODO: handle enums and structs
+                if s.expect(t, TokInfo::Equal, "expected =").is_ok() {
+                    let (t, ty) = s.parse_ty_expr(&t[1..])?;
+                    Ok((
+                        t,
+                        vec![Spanned::fusion(
+                            start,
+                            t[0].span.clone(),
+                            Decl::Ty { name, value: ty.map(TyDecl::Alias) },
+                        )],
+                    ))
+                } else {
+                    Ok((t, vec![Spanned::fusion(start, t[0].span.clone(), Decl::Ty { value: name.map_ref(|_| TyDecl::External), name })]))
+                }
             }
         )
     }
@@ -1290,7 +1296,7 @@ impl<'a, 'f> Parser<'a, 'f> {
                 )
             })
             .or_else(|e| {
-                choose_err(e, self.parse_ty(toks).map(|(t, ty)| (t, StaticArg::Ty(ty))))
+                choose_err(e, self.parse_ty_expr(toks).map(|(t, ty)| (t, StaticArg::Ty(ty))))
             })
             .or_else(|e| {
                 choose_err(e, self.parse_expr(toks).map(|(t, expr)| (t, StaticArg::Expr(expr))))
@@ -1406,7 +1412,7 @@ impl<'a, 'f> Parser<'a, 'f> {
 
                 s.expect(t, TokInfo::Colon, "expected :")?;
                 let t = &t[1..];
-                let (t, ty) = s.parse_ty(t)?;
+                let (t, ty) = s.parse_ty_expr(t)?;
 
                 Ok((
                     t,
@@ -1432,28 +1438,46 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
     }
 
-    fn parse_ty(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Ty<'a, 'f>> {
+    fn parse_ty_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, TyExpr<'a, 'f>> {
         let start = toks[0].span.clone();
-        let (toks, base) = if self.expect(toks, TokInfo::Int, "int").is_ok() {
-            (&toks[1..], BaseTy::Int)
+        let op_index = toks.iter().position(|t| t.item == TokInfo::Hat);
+        match op_index {
+            None | Some(0) => self.parse_base_ty_expr(toks),
+            Some(op_index) => {
+                if let Ok((left_toks, lhs)) = self.parse_ty_expr(&toks[..op_index]) {
+                    if !left_toks.is_empty() { // parsing the LHS actually failed
+                        return self.parse_base_ty_expr(toks);
+                    }
+                    let (t, rhs) = self.parse_expr(&toks[op_index + 1..])?;
+                    Ok((
+                        t,
+                        Spanned::fusion(
+                            start,
+                            rhs.span.clone(),
+                            TyExpr::Power(lhs.boxed(), rhs),
+                        ),
+                    ))
+                } else {
+                    self.parse_base_ty_expr(toks)
+                }
+            }
+        }
+    }
+
+    fn parse_base_ty_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, TyExpr<'a, 'f>> {
+        let start = toks[0].span.clone();
+        let (toks, ty) = if self.expect(toks, TokInfo::Int, "int").is_ok() {
+            (&toks[1..], TyExpr::Int)
         } else if self.expect(toks, TokInfo::Real, "real").is_ok() {
-            (&toks[1..], BaseTy::Real)
+            (&toks[1..], TyExpr::Real)
         } else if self.expect(toks, TokInfo::Bool, "bool").is_ok() {
-            (&toks[1..], BaseTy::Bool)
+            (&toks[1..], TyExpr::Bool)
         } else {
             let (toks, name) = self.parse_id(toks)?;
-            (toks, BaseTy::Named(name.item))
-        };
-        // TODO: handle types like bool^n^m
-        let (toks, len, end) = if self.expect(toks, TokInfo::Hat, "^").is_ok() {
-            let (t, l) = reportable!(self, parse_expr, &toks[1..]);
-            let end = l.span.clone();
-            (t, Some(l), end)
-        } else {
-            (toks, None, toks[0].span.clone())
+            (toks, TyExpr::Named(name.item))
         };
 
-        Ok((toks, Spanned::fusion(start, end, Ty { base, len })))
+        Ok((toks, Spanned { span: start, item: ty }))
     }
 
     fn parse_static_param_decl(
@@ -1479,7 +1503,7 @@ impl<'a, 'f> Parser<'a, 'f> {
                 } else if s.expect(t, TokInfo::Const, "const").is_ok() {
                     let (t, name) = s.parse_id(&t[1..])?;
                     s.expect(t, TokInfo::Colon, "expected :")?;
-                    let (t, ty) = s.parse_ty(&t[1..])?;
+                    let (t, ty) = s.parse_ty_expr(&t[1..])?;
                     Ok((
                         t,
                         vec![Spanned::fusion(
