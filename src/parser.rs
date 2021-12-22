@@ -54,17 +54,19 @@ pub enum Decl<'a, 'f> {
         static_params: Vec<Spanned<'f, StaticParamDecl<'a, 'f>>>,
         params: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
         outputs: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
-        effective_node: Spanned<'f, (Spanned<'f, Ident<'a, 'f>>, Vec<StaticArgs<'a, 'f>>)>,
+        effective_node: Spanned<'f, (Spanned<'f, Ident<'a, 'f>>, Vec<StaticArg<'a, 'f>>)>,
     },
 }
 
-#[derive(Debug)]
-pub enum StaticArgs<'a, 'f> {
+#[derive(Debug, Clone)]
+pub enum StaticArg<'a, 'f> {
     Expr(Spanned<'f, Expr<'a, 'f>>),
     Predefined(Spanned<'f, PredefinedItem>),
+    Ty(Spanned<'f, Ty<'a, 'f>>),
+    Node(Spanned<'f, Ident<'a, 'f>>, Vec<StaticArg<'a, 'f>>),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum PredefinedItem {
     Unary(UnaryOp),
     Binary(BinaryOp),
@@ -153,7 +155,7 @@ pub enum Expr<'a, 'f> {
     ),
     CallByName(
         Spanned<'f, Ident<'a, 'f>>,
-        Vec<Spanned<'f, Expr<'a, 'f>>>,
+        Vec<Spanned<'f, StaticArg<'a, 'f>>>,
         Vec<Spanned<'f, Expr<'a, 'f>>>,
     ),
 }
@@ -305,10 +307,12 @@ macro_rules! parse_bin {
             let start = toks[0].span.clone();
             let op_index = toks.iter().position(|t| t.item == TokInfo::$op);
             match op_index {
-                None => self.$next(toks),
+                None | Some(0) => self.$next(toks),
                 Some(op_index) => {
                     if let Ok((left_toks, lhs)) = self.$name(&toks[..op_index]) {
-                        assert!(left_toks.len() == 0);
+                        if !left_toks.is_empty() { // parsing the LHS actually failed
+                            return self.$next(toks);
+                        }
                         let (t, rhs) = self.$next(&toks[op_index + 1..])?;
                         Ok((
                             t,
@@ -498,7 +502,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     fn parse_many<F, E, T>(
         &mut self,
         toks: &'a [Tok<'a, 'f>],
-        sep: Option<TokInfo<'a>>,
+        sep: &'a [TokInfo<'a>],
         end: E,
         parse: F,
     ) -> Res<'a, 'f, Vec<T>>
@@ -510,21 +514,34 @@ impl<'a, 'f> Parser<'a, 'f> {
         let mut toks = toks;
         let mut err = None;
         let mut first = true;
-        while toks.len() > 1 && !end(self, toks) {
+        'not_done: while toks.len() > 1 && !end(self, toks) {
             if first {
                 first = false;
             } else {
-                if let Some(s) = sep.clone() {
-                    self.expect(
+                let mut err = None;
+                'sep: for s in sep {
+                    // dbg!(&toks[..3]);
+                    match (err, self.expect(
                         toks,
                         s.clone(),
                         Box::leak(format!("expected separator {:?}", s,).into_boxed_str()),
-                    )?;
-                    toks = &toks[1..];
-
-                    if end(self, toks) {
-                        break;
+                    )) {
+                        (None, Err(e)) => err = Some(e),
+                        (_, Ok(_)) => {
+                            err = None;
+                            toks = &toks[1..];
+                            break 'sep;
+                        },
+                        (e, _) => err = e,
                     }
+                }
+
+                if end(self, toks) {
+                    break 'not_done;
+                }
+
+                if let Some(err) = err {
+                    return Err(err);
                 }
             }
 
@@ -560,7 +577,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a, 'f>>>> {
         self.parse_many(
             toks,
-            None,
+            &[],
             |_, _| false,
             |s, t| {
                 s.parse_const_decl(t)
@@ -575,71 +592,95 @@ impl<'a, 'f> Parser<'a, 'f> {
         toks: &'a [Tok<'a, 'f>],
     ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a, 'f>>>> {
         let kw = self.expect(toks, TokInfo::Const, "expected const keyword")?;
-        let mut toks = toks;
-        let (t, id) = self.parse_id(&toks[1..])?;
-        toks = t;
-        let mut ids = vec![id];
-        while self.expect(toks, TokInfo::Coma, "expected ,").is_ok() {
-            let (t, id) = self.parse_id(&toks[1..])?;
-            ids.push(id);
-            toks = t;
-        }
-
-        let ty = if self.expect(toks, TokInfo::Colon, "expected :").is_ok() {
-            let (t, ty) = self.parse_ty(&toks[1..])?;
-            toks = t;
-            Some(ty)
-        } else {
-            None
-        };
-
-        let expr = if ids.len() == 1 && self.expect(toks, TokInfo::Equal, "expected =").is_ok() {
-            let (t, expr) = self.parse_expr(&toks[1..])?;
-            toks = t;
-            Some(expr)
-        } else {
-            None
-        };
-
-        self.expect(toks, TokInfo::Semicolon, "expected ;")?;
-
-        let ty = ty.map(|x| x.item);
-        Ok((
+        self.parse_many(
             &toks[1..],
-            ids.into_iter()
-                .map(|i| {
-                    Spanned::fusion(
-                        kw,
-                        &i,
-                        Decl::Const {
-                            name: i.item.clone(),
-                            ty: ty.clone(),
-                            value: expr.clone(),
-                        },
-                    )
-                })
-                .collect(),
-        ))
+            &[TokInfo::Semicolon],
+            |s, t| s.expect(t, TokInfo::Const, "const").is_ok()
+                || s.expect(t, TokInfo::Type, "type").is_ok()
+                || s.expect(t, TokInfo::Extern, "extern").is_ok()
+                || s.expect(t, TokInfo::Unsafe, "unsafe").is_ok()
+                || s.expect(t, TokInfo::Node, "node").is_ok()
+                || s.expect(t, TokInfo::Function, "function").is_ok(),
+            |s, t| {
+                // TODO: refactor id parsing with parse_many?
+                let (t, id) = s.parse_id(&t)?;
+                let mut ids = vec![id];
+                let t = {
+                    let mut toks = t;
+                    while s.expect(toks, TokInfo::Coma, "expected ,").is_ok() {
+                        let (t, id) = s.parse_id(&t[1..])?;
+                        ids.push(id);
+                        toks = t;
+                    }
+                    toks
+                };
+
+                dbg!(&t[..3]);
+                let (t, ty) = if s.expect(t, TokInfo::Colon, "expected :").is_ok() {
+                    let (t, ty) = s.parse_ty(&t[1..])?;
+                    (t, Some(ty))
+                } else {
+                    (t, None)
+                };
+
+                let (t, expr) = if ids.len() == 1 && s.expect(t, TokInfo::Equal, "expected =").is_ok() {
+                    let (t, expr) = s.parse_expr(&t[1..])?;
+                    (t, Some(expr))
+                } else {
+                    (t, None)
+                };
+
+
+                let ty = ty.map(|x| x.item);
+                Ok((
+                    t,
+                    ids.into_iter()
+                        .map(|i| {
+                            Spanned::fusion(
+                                kw,
+                                &i,
+                                Decl::Const {
+                                    name: i.item.clone(),
+                                    ty: ty.clone(),
+                                    value: expr.clone(),
+                                },
+                            )
+                        })
+                        .collect(),
+                ))
+            },
+        )
     }
 
     fn parse_type_decl(
         &mut self,
         toks: &'a [Tok<'a, 'f>],
     ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a, 'f>>>> {
-        let start = toks[0].span.clone();
         self.expect(toks, TokInfo::Type, "expected type")?;
-        let (toks, name) = self.parse_id(&toks[1..])?;
-        self.expect(toks, TokInfo::Equal, "expected =")?;
-        let (toks, ty) = self.parse_ty(&toks[1..])?;
-        self.expect(toks, TokInfo::Semicolon, "expected ;")?;
-        Ok((
+        self.parse_many(
             &toks[1..],
-            vec![Spanned::fusion(
-                start,
-                toks[0].span.clone(),
-                Decl::Ty { name, value: ty },
-            )],
-        ))
+            &[TokInfo::Semicolon],
+            |s, t| s.expect(t, TokInfo::Const, "const").is_ok()
+                || s.expect(t, TokInfo::Type, "type").is_ok()
+                || s.expect(t, TokInfo::Extern, "extern").is_ok()
+                || s.expect(t, TokInfo::Unsafe, "unsafe").is_ok()
+                || s.expect(t, TokInfo::Node, "node").is_ok()
+                || s.expect(t, TokInfo::Function, "function").is_ok(),
+            |s, t| {
+                let start = t[0].span.clone();
+                let (t, name) = s.parse_id(t)?;
+                s.expect(t, TokInfo::Equal, "expected =")?;
+                let (t, ty) = s.parse_ty(&t[1..])?;
+                Ok((
+                    t,
+                    vec![Spanned::fusion(
+                        start,
+                        t[0].span.clone(),
+                        Decl::Ty { name, value: ty },
+                    )],
+                ))
+            }
+        )
     }
 
     #[track_caller]
@@ -954,11 +995,11 @@ impl<'a, 'f> Parser<'a, 'f> {
             let (toks, static_params) = if self.expect(toks, TokInfo::OpenStaticPar, "<<").is_ok() {
                 let (toks, params) = self.parse_many(
                     &toks[1..],
-                    Some(TokInfo::Coma),
+                    &[TokInfo::Coma, TokInfo::Semicolon],
                     |s, t| s.expect(t, TokInfo::CloseStaticPar, ">>").is_ok(),
                     |s, t| {
-                        let (toks, expr) = reportable!(s, parse_expr, t);
-                        Ok((toks, vec![expr]))
+                        let (toks, expr) = reportable!(s, parse_static_arg, t);
+                        Ok((toks, vec![Spanned::fusion(t[0].span.clone(), toks[0].span.clone(), expr)]))
                     },
                 )?;
                 self.expect(toks, TokInfo::CloseStaticPar, "expected >>")?;
@@ -972,7 +1013,7 @@ impl<'a, 'f> Parser<'a, 'f> {
             {
                 let (toks, params) = self.parse_many(
                     &toks[1..],
-                    Some(TokInfo::Coma),
+                    &[TokInfo::Coma],
                     |s, t| s.expect(t, TokInfo::ClosePar, ")").is_ok(),
                     |s, t| {
                         let (toks, expr) = s.parse_expr(t)?;
@@ -1113,7 +1154,7 @@ impl<'a, 'f> Parser<'a, 'f> {
         let static_params = if self.expect(&toks, TokInfo::OpenStaticPar, "<<").is_ok() {
             let (t, sp) = self.parse_many(
                 &toks[1..],
-                Some(TokInfo::Semicolon),
+                &[TokInfo::Semicolon],
                 |s, t| s.expect(t, TokInfo::CloseStaticPar, ">>").is_ok(),
                 |s, t| s.parse_static_param_decl(t),
             )?;
@@ -1170,39 +1211,13 @@ impl<'a, 'f> Parser<'a, 'f> {
 
         if is_alias {
             toks = &toks[1..];
-            let name_span = toks[0].span.clone();
-            let (t, effective_node_name) = self.parse_id(toks)?;
-            toks = t;
-            let effective_static_params = if self.expect(toks, TokInfo::OpenStaticPar, "<<").is_ok()
-            {
-                // TODO: the separator may be a ; too
-                let (t, params) = self.parse_many(
-                    &toks[1..],
-                    Some(TokInfo::Coma),
-                    |s, t| s.expect(t, TokInfo::CloseStaticPar, ">>").is_ok(),
-                    |s, t| {
-                        let (t, expr) = reportable!(s, parse_static_arg, t);
-                        Ok((t, vec![expr]))
-                    },
-                )?;
-                toks = t;
-                self.expect(toks, TokInfo::CloseStaticPar, "expected >>")?;
-                toks = &toks[1..];
-                params
+            let (t, effective_node) = self.parse_effective_node(toks)?;
+            toks = if self.expect(t, TokInfo::Semicolon, ";").is_ok() {
+                &t[1..]
             } else {
-                Vec::new()
-            };
-            toks = if self.expect(toks, TokInfo::Semicolon, ";").is_ok() {
-                &toks[1..]
-            } else {
-                toks
+                t
             };
 
-            let effective_node = Spanned::fusion(
-                name_span,
-                toks[0].span.clone(),
-                (effective_node_name, effective_static_params),
-            );
 
             Ok((
                 toks,
@@ -1263,16 +1278,50 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
     }
 
-    fn parse_static_arg(&mut self, toks: &'a [Tok<'a, 'f>]) -> Res<'a, 'f, StaticArgs<'a, 'f>> {
-        self.parse_expr(toks)
-            .map(|(t, expr)| (t, StaticArgs::Expr(expr)))
+    fn parse_static_arg(&mut self, toks: &'a [Tok<'a, 'f>]) -> Res<'a, 'f, StaticArg<'a, 'f>> {
+        // TODO: the kind of static arg can be explicitely specified with const/type/node/function
+        self.parse_effective_node(toks)
+            .map(|(t, Spanned { item: (name, args), .. })| (t, StaticArg::Node(name, args)))
             .or_else(|e| {
                 choose_err(
                     e,
                     self.parse_predefined(toks)
-                        .map(|(t, p)| (t, StaticArgs::Predefined(p))),
+                        .map(|(t, p)| (t, StaticArg::Predefined(p))),
                 )
             })
+            .or_else(|e| {
+                choose_err(e, self.parse_ty(toks).map(|(t, ty)| (t, StaticArg::Ty(ty))))
+            })
+            .or_else(|e| {
+                choose_err(e, self.parse_expr(toks).map(|(t, expr)| (t, StaticArg::Expr(expr))))
+            })
+    }
+
+    fn parse_effective_node(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, (Spanned<'f, Ident<'a, 'f>>, Vec<StaticArg<'a, 'f>>)> {
+        let name_span = toks[0].span.clone();
+        let (toks, effective_node_name) = self.parse_id(toks)?;
+        let (toks, effective_static_params) = if self.expect(toks, TokInfo::OpenStaticPar, "<<").is_ok()
+        {
+            let (toks, params) = self.parse_many(
+                &toks[1..],
+                &[TokInfo::Coma, TokInfo::Semicolon],
+                |s, t| s.expect(t, TokInfo::CloseStaticPar, ">>").is_ok(),
+                |s, t| {
+                    let (t, expr) = reportable!(s, parse_static_arg, t);
+                    Ok((t, vec![expr]))
+                },
+            )?;
+            self.expect(toks, TokInfo::CloseStaticPar, "expected >>")?;
+            (&toks[1..], params)
+        } else {
+            (toks, Vec::new())
+        };
+
+        Ok((toks, Spanned::fusion(
+            name_span,
+            toks[0].span.clone(),
+            (effective_node_name, effective_static_params),
+        )))
     }
 
     fn parse_predefined(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, PredefinedItem> {
@@ -1288,6 +1337,13 @@ impl<'a, 'f> Parser<'a, 'f> {
             Percent => Some(BinaryOp::Percent),
             Or => Some(BinaryOp::Or),
             And => Some(BinaryOp::And),
+            Impl => Some(BinaryOp::Impl),
+            Lt => Some(BinaryOp::Lt),
+            Lte => Some(BinaryOp::Lte),
+            Gt => Some(BinaryOp::Gt),
+            Gte => Some(BinaryOp::Gte),
+            Equal => Some(BinaryOp::Equal),
+            Neq => Some(BinaryOp::Neq),
             _ => None,
         };
         let un_op = match toks[0].item {
@@ -1323,7 +1379,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     ) -> Res<'a, 'f, Vec<Spanned<'f, VariableDecl<'a, 'f>>>> {
         let (toks, decls) = self.parse_many(
             toks,
-            Some(TokInfo::Semicolon),
+            &[TokInfo::Semicolon],
             |_, t| match t.get(0).map(|t| t.item.clone()) {
                 Some(
                     TokInfo::Semicolon
@@ -1337,7 +1393,7 @@ impl<'a, 'f> Parser<'a, 'f> {
             |s, t| {
                 let (t, names) = s.parse_many(
                     t,
-                    Some(TokInfo::Coma),
+                    &[TokInfo::Coma],
                     |_, t| match t.get(0).map(|t| t.item.clone()) {
                         Some(TokInfo::Ident(_) | TokInfo::Coma) => false,
                         _ => true,
@@ -1406,7 +1462,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     ) -> Res<'a, 'f, Vec<Spanned<'f, StaticParamDecl<'a, 'f>>>> {
         self.parse_many(
             toks,
-            Some(TokInfo::Semicolon),
+            &[TokInfo::Semicolon],
             |s, t| s.expect(t, TokInfo::CloseStaticPar, ">>").is_ok(),
             |s, t| {
                 let start_span = t[0].span.clone();
@@ -1473,7 +1529,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     ) -> Res<'a, 'f, Vec<Spanned<'f, BodyItem<'a, 'f>>>> {
         self.parse_many(
             toks,
-            Some(TokInfo::Semicolon),
+            &[TokInfo::Semicolon],
             |s, t| s.expect(t, TokInfo::Tel, "tel").is_ok(),
             |s, t| {
                 let start = t[0].span.clone();
@@ -1513,7 +1569,7 @@ impl<'a, 'f> Parser<'a, 'f> {
             // TODO: i think the parenthesis are actually optional
             let (toks, items) = self.parse_many(
                 &toks[1..],
-                Some(TokInfo::Coma),
+                &[TokInfo::Coma],
                 |s, t| s.expect(t, TokInfo::ClosePar, ")").is_ok(),
                 |s, t| {
                     let (toks, inner) = s.parse_left_item(t)?;
@@ -1545,7 +1601,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     ) -> Res<'a, 'f, Vec<Spanned<'f, LeftItem<'a, 'f>>>> {
         self.parse_many(
             t,
-            Some(TokInfo::Coma),
+            &[TokInfo::Coma],
             |s, t| {
                 s.expect(t, TokInfo::Equal, "=").is_ok() || s.expect(t, TokInfo::Tel, "tel").is_ok()
             },
