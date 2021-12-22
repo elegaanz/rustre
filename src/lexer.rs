@@ -144,7 +144,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                             pos = end;
                             end = self.find_next_delimiter(pos);
                         } else {
-                            end -= 1;
+                            end = self.next_char(end, -1);
                         }
                     }
                 }
@@ -185,35 +185,37 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     }
                 }
                 Grammar::Comment(end) => {
-                    let mut comm_end = pos + 1;
-                    while comm_end + 1 < total_len
-                        && &self.src[comm_end..comm_end + 2] != &format!("*{}", end)
+                    let mut comm_end = self.next_char(pos, 1);
+                    while self.next_char(comm_end, 1) < total_len
+                        && &self.src[comm_end..self.next_char(comm_end, 2)] != &format!("*{}", end)
                     {
-                        match &self.src[comm_end..comm_end + 1] {
+                        match &self.src[comm_end..self.next_char(comm_end, 1)] {
                             "\n" => {
                                 col = 0;
                                 line += 1
                             }
                             _ => col += 1,
                         }
-                        comm_end += 1;
+                        comm_end = self.next_char(comm_end, 1);
                     }
-                    pos = comm_end + 1;
+                    pos = self.next_char(comm_end, 1);
                     if pos < total_len {
                         grammar = Grammar::Main;
                     }
                 }
                 Grammar::InlineComment => {
-                    let mut comm_end = pos + 1;
-                    while comm_end + 1 < total_len && &self.src[comm_end..comm_end + 1] != "\n" {
-                        match &self.src[comm_end..comm_end + 1] {
+                    let mut comm_end = self.next_char(pos, 1);
+                    while self.next_char(comm_end, 1) < total_len
+                        && &self.src[comm_end..self.next_char(comm_end, 1)] != "\n"
+                    {
+                        match &self.src[comm_end..self.next_char(comm_end, 1)] {
                             "\n" => {
                                 col = 0;
                                 line += 1
                             }
                             _ => col += 1,
                         }
-                        comm_end += 1;
+                        comm_end = self.next_char(comm_end, 1);
                     }
                     pos = comm_end;
                     grammar = Grammar::Main;
@@ -221,8 +223,8 @@ impl<'a, 'f> Lexer<'a, 'f> {
             }
 
             if pos >= end {
-                if pos + 1 < total_len {
-                    match &self.src[pos..pos + 1] {
+                if self.next_char(pos, 1) < total_len {
+                    match &self.src[pos..self.next_char(pos, 1)] {
                         "\n" => {
                             col = 0;
                             line += 1
@@ -230,7 +232,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                         _ => col += 1,
                     };
                 }
-                pos += 1;
+                pos = self.next_char(pos, 1);
                 end = total_len;
             }
         }
@@ -434,6 +436,14 @@ impl<'a, 'f> Lexer<'a, 'f> {
             }
         }
         delim
+    }
+
+    fn next_char(&self, from: usize, add: isize) -> usize {
+        let mut new_pos = (from as isize) + add;
+        while !self.src.is_char_boundary(new_pos as usize) && (new_pos as usize) < self.src.len() {
+            new_pos += add;
+        }
+        new_pos as usize
     }
 }
 
