@@ -189,7 +189,6 @@ pub enum BinaryOp {
     // TODO: maybe this could be merged with Mod?
     // same for Div/Slash btw
     Percent,
-    Sharp,
     FieldAccess,
     Hat,
 }
@@ -204,6 +203,7 @@ pub enum TernaryOp {
 pub enum NAryOp {
     Xor,
     Nor,
+    Array,
 }
 
 #[derive(Debug)]
@@ -883,8 +883,11 @@ impl<'a, 'f> Parser<'a, 'f> {
     }
 
     fn parse_array_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
+        let start = &toks[0].span;
         if self.expect(toks, TokInfo::OpenBracket, "[").is_ok() {
-            todo!()
+            let (toks, items) = self.parse_tuple(&toks[1..])?;
+            self.expect(toks, TokInfo::CloseBracket, "expected ]")?;
+            Ok((&toks[1..], Spanned::fusion(start.clone(), toks[0].span.clone(), Expr::NAry(NAryOp::Array, items))))
         } else {
             self.parse_struct_expr(toks)
         }
