@@ -29,7 +29,14 @@ pub enum Decl<'a, 'f> {
         name: Spanned<'f, Ident<'a, 'f>>,
         value: Spanned<'f, Ty<'a, 'f>>,
     },
-    ExtNode,
+    ExternalNode {
+        is_unsafe: bool,
+        is_function: bool,
+        name: Spanned<'f, Ident<'a, 'f>>,
+        static_params: Vec<Spanned<'f, StaticParamDecl<'a, 'f>>>,
+        params: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
+        outputs: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
+    },
     Node {
         is_unsafe: bool,
         is_function: bool,
@@ -300,20 +307,24 @@ macro_rules! parse_bin {
             match op_index {
                 None => self.$next(toks),
                 Some(op_index) => {
-                    let (t, lhs) = self.$name(&toks[..op_index])?;
-                    let (t, rhs) = self.$next(&t[1..])?;
-                    Ok((
-                        t,
-                        Spanned::fusion(
-                            start,
-                            rhs.span.clone(),
-                            Expr::Binary(
-                                toks[op_index].map_ref(|_| BinaryOp::$op2),
-                                lhs.boxed(),
-                                rhs.boxed(),
+                    if let Ok((left_toks, lhs)) = self.$name(&toks[..op_index]) {
+                        assert!(left_toks.len() == 0);
+                        let (t, rhs) = self.$next(&toks[op_index + 1..])?;
+                        Ok((
+                            t,
+                            Spanned::fusion(
+                                start,
+                                rhs.span.clone(),
+                                Expr::Binary(
+                                    toks[op_index].map_ref(|_| BinaryOp::$op2),
+                                    lhs.boxed(),
+                                    rhs.boxed(),
+                                ),
                             ),
-                        ),
-                    ))
+                        ))
+                    } else {
+                        self.$next(toks)
+                    }
                 }
             }
         }
@@ -553,7 +564,7 @@ impl<'a, 'f> Parser<'a, 'f> {
             |_, _| false,
             |s, t| {
                 s.parse_const_decl(t)
-                    .or_else(|e| choose_err(e, s.parse_local_node_decl(t)))
+                    .or_else(|e| choose_err(e, s.parse_node_decl(t)))
                     .or_else(|e| choose_err(e, s.parse_type_decl(t)))
             },
         )
@@ -1077,7 +1088,7 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
     }
 
-    fn parse_local_node_decl(
+    fn parse_node_decl(
         &mut self,
         toks: &'a [Tok<'a, 'f>],
     ) -> Res<'a, 'f, Vec<Spanned<'f, Decl<'a, 'f>>>> {
@@ -1085,6 +1096,8 @@ impl<'a, 'f> Parser<'a, 'f> {
         let mut toks = toks;
         let is_unsafe = self.expect(toks, TokInfo::Unsafe, "unsafe keyword").is_ok();
         toks = if is_unsafe { &toks[1..] } else { toks };
+        let is_extern = self.expect(toks, TokInfo::Extern, "extern keyword").is_ok();
+        toks = if is_extern { &toks[1..] } else { toks };
         let is_node = self.expect(&toks, TokInfo::Node, "node keyword").is_ok();
         if !is_node {
             self.expect(
@@ -1134,6 +1147,18 @@ impl<'a, 'f> Parser<'a, 'f> {
         } else {
             Vec::new()
         };
+
+        if is_extern {
+            self.expect(toks, TokInfo::Semicolon, "expected ;")?;
+
+            return Ok((&toks[1..], vec![
+                Spanned::fusion(
+                    start_span,
+                    toks[0].span.clone(),
+                    Decl::ExternalNode { is_function: !is_node, is_unsafe, name, outputs: returns, params, static_params },
+                )
+            ]))
+        }
 
         let is_alias = self.expect(toks, TokInfo::Equal, "=").is_ok();
         if !is_alias && !has_params {
