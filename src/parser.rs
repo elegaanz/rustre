@@ -141,7 +141,15 @@ pub struct Variable<'a, 'f> {
 pub struct VariableDecl<'a, 'f> {
     name: Spanned<'f, Ident<'a, 'f>>,
     ty: Spanned<'f, TyExpr<'a, 'f>>,
+    /// If None, the base clock is used
+    clock: Option<Spanned<'f, ClockExpr<'a, 'f>>>,
 }
+
+#[derive(Clone, Debug)]
+pub struct ClockExpr<'a, 'f>(
+    Spanned<'f, Ident<'a, 'f>>,
+    Box<Option<Spanned<'f, Ident<'a, 'f>>>>,
+);
 
 #[derive(Clone, Debug)]
 pub enum TyExpr<'a, 'f> {
@@ -191,10 +199,7 @@ pub enum Expr<'a, 'f> {
         otherwise: Spanned<'f, Box<Expr<'a, 'f>>>,
     },
     StructAccess(Spanned<'f, Box<Expr<'a, 'f>>>, Ident<'a, 'f>),
-    NamedClock(
-        Spanned<'f, Ident<'a, 'f>>,
-        Box<Option<Spanned<'f, Ident<'a, 'f>>>>,
-    ),
+    NamedClock(ClockExpr<'a, 'f>),
     CallByName(
         Spanned<'f, Ident<'a, 'f>>,
         Vec<Spanned<'f, StaticArg<'a, 'f>>>,
@@ -936,7 +941,10 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
     }
 
-    fn parse_clock_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
+    fn parse_clock_expr(
+        &mut self,
+        toks: &'a [Tok<'a, 'f>],
+    ) -> SpannedRes<'a, 'f, ClockExpr<'a, 'f>> {
         let start = toks[0].span.clone();
         let not = self.expect(toks, TokInfo::Not, "not").is_ok();
         let toks = if not { &toks[1..] } else { toks };
@@ -953,7 +961,7 @@ impl<'a, 'f> Parser<'a, 'f> {
             Spanned::fusion(
                 start,
                 toks[0].span.clone(),
-                Expr::NamedClock(name, Box::new(param)),
+                ClockExpr(name, Box::new(param)),
             ),
         ))
     }
@@ -980,7 +988,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     fn parse_xor(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
         let start = toks[0].span.clone();
         let (toks, lhs) = self.parse_and(toks)?;
-        if let Ok(op) = self.expect(toks, TokInfo::Xor, "expected xor") {
+        if let Ok(_) = self.expect(toks, TokInfo::Xor, "expected xor") {
             let (toks, rhs) = self.parse_xor(&toks[1..])?;
             match rhs.item {
                 // TODO: this will build one n-ary expression from `a xor #(b, c)`, which is maybe
@@ -1650,6 +1658,12 @@ impl<'a, 'f> Parser<'a, 'f> {
                 s.expect(t, TokInfo::Colon, "expected :")?;
                 let t = &t[1..];
                 let (t, ty) = s.parse_ty_expr(t)?;
+                let (t, clock) = if s.expect(t, TokInfo::When, "when").is_ok() {
+                    let (t, clock) = s.parse_clock_expr(&t[1..])?;
+                    (t, Some(clock))
+                } else {
+                    (t, None)
+                };
 
                 Ok((
                     t,
@@ -1659,6 +1673,7 @@ impl<'a, 'f> Parser<'a, 'f> {
                             name.map_ref(|_| VariableDecl {
                                 name: name.clone(),
                                 ty: ty.clone(),
+                                clock: clock.clone(),
                             })
                         })
                         .collect(),
