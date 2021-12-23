@@ -852,6 +852,7 @@ impl<'a, 'f> Parser<'a, 'f> {
         let start = toks[0].span.clone();
         let (toks, name) = self.parse_id(toks)?;
         if self.expect(toks, TokInfo::Equal, "expected =").is_ok() {
+            let has_brace = self.expect(&toks[1..], TokInfo::OpenBrace, "{").is_ok();
             if let Ok((toks, ty)) = self.parse_ty_expr(&toks[1..]) {
                 Ok((
                     toks,
@@ -864,10 +865,15 @@ impl<'a, 'f> Parser<'a, 'f> {
                         },
                     ),
                 ))
-            } else if self.expect(&toks[1..], TokInfo::Struct, "struct").is_ok() {
+            } else if self.expect(&toks[1..], TokInfo::Struct, "struct").is_ok() || has_brace {
                 let decl_start = toks[1].span.clone();
-                self.expect(&toks[2..], TokInfo::OpenBrace, "expected {")?;
-                let (toks, fields) = self.parse_valued_var_decl(&toks[3..], true)?;
+                let toks = if !has_brace {
+                    self.expect(&toks[2..], TokInfo::OpenBrace, "expected {")?;
+                    &toks[3..]
+                } else {
+                    &toks[2..]
+                };
+                let (toks, fields) = self.parse_valued_var_decl(toks, true)?;
                 self.expect(toks, TokInfo::CloseBrace, "expected }")?;
                 Ok((
                     &toks[1..],
