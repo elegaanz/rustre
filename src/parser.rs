@@ -205,6 +205,11 @@ pub enum Expr<'a, 'f> {
         Vec<Spanned<'f, StaticArg<'a, 'f>>>,
         Vec<Spanned<'f, Expr<'a, 'f>>>,
     ),
+    CreateStruct {
+        ty_name: Spanned<'f, Ident<'a, 'f>>,
+        fields: Vec<(Spanned<'f, Ident<'a, 'f>>, Spanned<'f, Expr<'a, 'f>>)>,
+        base_value: Option<Spanned<'f, Box<Expr<'a, 'f>>>>,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -1220,10 +1225,52 @@ impl<'a, 'f> Parser<'a, 'f> {
     }
 
     fn parse_struct_expr(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
-        if self.expect(toks, TokInfo::OpenBrace, "{").is_ok() {
-            todo!()
+        let t = toks;
+        let start = toks[0].span.clone();
+        if let Ok((toks, name)) = self.parse_id(toks) {
+            if self.expect(toks, TokInfo::OpenBrace, "{").is_ok() {
+                let t = &toks[1..];
+                let (toks, base) = if let Ok((toks, base)) = self.parse_expr(t) {
+                    if self.expect(toks, TokInfo::With, "").is_ok() {
+                        (&toks[1..], Some(base))
+                    } else {
+                        (t, None)
+                    }
+                } else {
+                    (t, None)
+                };
+
+                let (toks, fields) = self.parse_many(
+                    toks,
+                    &[TokInfo::Coma, TokInfo::Semicolon],
+                    |s, t| s.expect(t, TokInfo::CloseBrace, "").is_ok(),
+                    |s, t| {
+                        let (t, name) = s.parse_id(t)?;
+                        s.expect(t, TokInfo::Equal, "expected =")?;
+                        let (t, val) = s.parse_expr(&t[1..])?;
+                        Ok((t, vec![(name, val)]))
+                    },
+                )?;
+
+                self.expect(toks, TokInfo::CloseBrace, "expected }")?;
+
+                Ok((
+                    &toks[1..],
+                    Spanned::fusion(
+                        start,
+                        toks[0].span.clone(),
+                        Expr::CreateStruct {
+                            ty_name: name,
+                            base_value: base.map(Spanned::boxed),
+                            fields,
+                        },
+                    ),
+                ))
+            } else {
+                self.parse_paren_expr(t)
+            }
         } else {
-            self.parse_paren_expr(toks)
+            self.parse_paren_expr(t)
         }
     }
 
