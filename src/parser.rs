@@ -840,6 +840,7 @@ impl<'a, 'f> Parser<'a, 'f> {
                     || s.expect(t, TokInfo::Unsafe, "unsafe").is_ok()
                     || s.expect(t, TokInfo::Node, "node").is_ok()
                     || s.expect(t, TokInfo::Function, "function").is_ok()
+                    || s.expect(t, TokInfo::End, "end").is_ok()
             },
             |s, t| {
                 let (toks, decl) = s.parse_one_type_decl(t)?;
@@ -2063,7 +2064,6 @@ impl<'a, 'f> Parser<'a, 'f> {
     }
 
     fn parse_left_item(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, LeftItem<'a, 'f>> {
-        // TODO
         if let Some(bracket_index) = toks.iter().position(|x| x.item == TokInfo::OpenBracket) {
             let (t, lhs) = self.parse_left_item(&toks[..bracket_index])?;
             if t.is_empty() {
@@ -2075,6 +2075,20 @@ impl<'a, 'f> Parser<'a, 'f> {
                         lhs.span.clone(),
                         toks[0].span.clone(),
                         LeftItem::TableIndexOrSlice(Box::new(lhs), rhs),
+                    ),
+                ));
+            }
+        }
+        if let Some(dot_index) = toks.iter().position(|x| x.item == TokInfo::Dot) {
+            let (t, lhs) = self.parse_left_item(&toks[..dot_index])?;
+            if t.is_empty() {
+                let (toks, id) = self.parse_id(&toks[dot_index + 1..])?;
+                return Ok((
+                    toks,
+                    Spanned::fusion(
+                        lhs.span.clone(),
+                        id.span.clone(),
+                        LeftItem::Field(Box::new(lhs), id),
                     ),
                 ));
             }
