@@ -165,7 +165,7 @@ pub enum TyDecl<'a, 'f> {
     External,
     Alias(TyExpr<'a, 'f>),
     Enum(Vec<Spanned<'f, Ident<'a, 'f>>>),
-    Struct(Vec<Spanned<'f, (Ident<'a, 'f>, TyExpr<'a, 'f>)>>),
+    Struct(Vec<Spanned<'f, VariableDecl<'a, 'f>>>),
 }
 
 #[derive(Clone, Debug)]
@@ -827,20 +827,73 @@ impl<'a, 'f> Parser<'a, 'f> {
     fn parse_one_type_decl(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Decl<'a, 'f>> {
         let start = toks[0].span.clone();
         let (toks, name) = self.parse_id(toks)?;
-        // TODO: handle enums and structs
         if self.expect(toks, TokInfo::Equal, "expected =").is_ok() {
-            let (toks, ty) = self.parse_ty_expr(&toks[1..])?;
-            Ok((
-                toks,
-                Spanned::fusion(
-                    start,
-                    toks[0].span.clone(),
-                    Decl::Ty {
-                        name,
-                        value: ty.map(TyDecl::Alias),
+            if let Ok((toks, ty)) = self.parse_ty_expr(&toks[1..]) {
+                Ok((
+                    toks,
+                    Spanned::fusion(
+                        start,
+                        toks[0].span.clone(),
+                        Decl::Ty {
+                            name,
+                            value: ty.map(TyDecl::Alias),
+                        },
+                    ),
+                ))
+            } else if self.expect(&toks[1..], TokInfo::Struct, "struct").is_ok() {
+                let decl_start = toks[1].span.clone();
+                self.expect(&toks[2..], TokInfo::OpenBrace, "expected {")?;
+                let (toks, fields) = self.parse_var_decl(&toks[3..], true)?;
+                self.expect(toks, TokInfo::CloseBrace, "expected }")?;
+                Ok((
+                    &toks[1..],
+                    Spanned::fusion(
+                        start,
+                        toks[0].span.clone(),
+                        Decl::Ty {
+                            name,
+                            value: Spanned::fusion(
+                                decl_start,
+                                toks[0].span.clone(),
+                                TyDecl::Struct(fields),
+                            ),
+                        },
+                    ),
+                ))
+            } else if self.expect(&toks[1..], TokInfo::Enum, "enum").is_ok() {
+                let decl_start = toks[1].span.clone();
+                self.expect(&toks[2..], TokInfo::OpenBrace, "expected {")?;
+                let (toks, variants) = self.parse_many(
+                    &toks[3..],
+                    &[TokInfo::Coma],
+                    |s, t| s.expect(t, TokInfo::CloseBrace, "").is_ok(),
+                    |s, t| {
+                        let (toks, id) = s.parse_id(t)?;
+                        Ok((toks, vec![id]))
                     },
-                ),
-            ))
+                )?;
+                self.expect(toks, TokInfo::CloseBrace, "expected }")?;
+                Ok((
+                    &toks[1..],
+                    Spanned::fusion(
+                        start,
+                        toks[0].span.clone(),
+                        Decl::Ty {
+                            name,
+                            value: Spanned::fusion(
+                                decl_start,
+                                toks[0].span.clone(),
+                                TyDecl::Enum(variants),
+                            ),
+                        },
+                    ),
+                ))
+            } else {
+                Err(Error::UnexpectedToken(
+                    &toks[1..],
+                    "expected a type expression, struct or enum",
+                ))
+            }
         } else {
             Ok((
                 toks,
