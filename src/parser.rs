@@ -284,13 +284,8 @@ pub enum LeftItem<'a, 'f> {
         Box<Spanned<'f, LeftItem<'a, 'f>>>,
         Spanned<'f, Ident<'a, 'f>>,
     ),
-    TableIndex(
+    TableIndexOrSlice(
         Box<Spanned<'f, LeftItem<'a, 'f>>>,
-        Spanned<'f, Expr<'a, 'f>>,
-    ),
-    TableSlice(
-        Box<Spanned<'f, LeftItem<'a, 'f>>>,
-        Spanned<'f, Expr<'a, 'f>>,
         Spanned<'f, Expr<'a, 'f>>,
     ),
 }
@@ -1945,11 +1940,23 @@ impl<'a, 'f> Parser<'a, 'f> {
         )
     }
 
-    fn parse_left_item(
-        &mut self,
-        toks: &'a [Spanned<'f, TokInfo<'a>>],
-    ) -> SpannedRes<'a, 'f, LeftItem<'a, 'f>> {
+    fn parse_left_item(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, LeftItem<'a, 'f>> {
         // TODO
+        if let Some(bracket_index) = toks.iter().position(|x| x.item == TokInfo::OpenBracket) {
+            let (t, lhs) = self.parse_left_item(&toks[..bracket_index])?;
+            if t.is_empty() {
+                let (toks, rhs) = self.parse_index_or_slice(&toks[bracket_index + 1..])?;
+                self.expect(toks, TokInfo::CloseBracket, "expected ]")?;
+                return Ok((
+                    &toks[1..],
+                    Spanned::fusion(
+                        lhs.span.clone(),
+                        toks[0].span.clone(),
+                        LeftItem::TableIndexOrSlice(Box::new(lhs), rhs),
+                    ),
+                ));
+            }
+        }
         if self.expect(toks, TokInfo::OpenPar, "(").is_ok() {
             // TODO: i think the parenthesis are actually optional
             let (toks, items) = self.parse_many(
