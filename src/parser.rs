@@ -132,17 +132,22 @@ pub enum StaticParamDecl<'a, 'f> {
         outputs: Vec<Spanned<'f, VariableDecl<'a, 'f>>>,
     },
 }
-#[derive(Clone, Debug)]
-pub struct Variable<'a, 'f> {
-    _name: &'a str,
-    _name2: &'f str,
-}
+
 #[derive(Clone, Debug)]
 pub struct VariableDecl<'a, 'f> {
     name: Spanned<'f, Ident<'a, 'f>>,
     ty: Spanned<'f, TyExpr<'a, 'f>>,
     /// If None, the base clock is used
     clock: Option<Spanned<'f, ClockExpr<'a, 'f>>>,
+}
+
+#[derive(Clone, Debug)]
+pub struct ValuedVariableDecl<'a, 'f> {
+    name: Spanned<'f, Ident<'a, 'f>>,
+    ty: Spanned<'f, TyExpr<'a, 'f>>,
+    /// If None, the base clock is used
+    clock: Option<Spanned<'f, ClockExpr<'a, 'f>>>,
+    value: Option<Spanned<'f, Expr<'a, 'f>>>,
 }
 
 #[derive(Clone, Debug)]
@@ -165,7 +170,7 @@ pub enum TyDecl<'a, 'f> {
     External,
     Alias(TyExpr<'a, 'f>),
     Enum(Vec<Spanned<'f, Ident<'a, 'f>>>),
-    Struct(Vec<Spanned<'f, VariableDecl<'a, 'f>>>),
+    Struct(Vec<Spanned<'f, ValuedVariableDecl<'a, 'f>>>),
 }
 
 #[derive(Clone, Debug)]
@@ -199,7 +204,7 @@ pub enum Expr<'a, 'f> {
         otherwise: Spanned<'f, Box<Expr<'a, 'f>>>,
     },
     StructAccess(Spanned<'f, Box<Expr<'a, 'f>>>, Ident<'a, 'f>),
-    NamedClock(ClockExpr<'a, 'f>),
+    NamedClock(Spanned<'f, ClockExpr<'a, 'f>>),
     CallByName(
         Spanned<'f, Ident<'a, 'f>>,
         Vec<Spanned<'f, StaticArg<'a, 'f>>>,
@@ -319,6 +324,25 @@ macro_rules! parse_bin {
                             lhs.boxed(),
                             rhs.boxed(),
                         ),
+                    ),
+                ))
+            } else {
+                Ok((toks, lhs))
+            }
+        }
+    };
+    (LEFT $name:ident, rhs = $rhs:ident, $op:ident, $disp:expr, $next:ident) => {
+        fn $name(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
+            let start = toks[0].span.clone();
+            let (toks, lhs) = self.$next(toks)?;
+            if let Ok(_) = self.expect(toks, TokInfo::$op, concat!("expected ", $disp)) {
+                let (toks, rhs) = self.$rhs(&toks[1..])?;
+                Ok((
+                    toks,
+                    Spanned::fusion(
+                        start,
+                        rhs.span,
+                        rhs.item,
                     ),
                 ))
             } else {
@@ -843,7 +867,7 @@ impl<'a, 'f> Parser<'a, 'f> {
             } else if self.expect(&toks[1..], TokInfo::Struct, "struct").is_ok() {
                 let decl_start = toks[1].span.clone();
                 self.expect(&toks[2..], TokInfo::OpenBrace, "expected {")?;
-                let (toks, fields) = self.parse_var_decl(&toks[3..], true)?;
+                let (toks, fields) = self.parse_valued_var_decl(&toks[3..], true)?;
                 self.expect(toks, TokInfo::CloseBrace, "expected }")?;
                 Ok((
                     &toks[1..],
@@ -994,6 +1018,17 @@ impl<'a, 'f> Parser<'a, 'f> {
         }
     }
 
+    fn parse_named_clock(&mut self, toks: &'a [Tok<'a, 'f>]) -> SpannedRes<'a, 'f, Expr<'a, 'f>> {
+        let (toks, clock) = self.parse_clock_expr(toks)?;
+        Ok((
+            toks,
+            Spanned {
+                span: clock.span.clone(),
+                item: Expr::NamedClock(clock),
+            },
+        ))
+    }
+
     fn parse_clock_expr(
         &mut self,
         toks: &'a [Tok<'a, 'f>],
@@ -1097,7 +1132,7 @@ impl<'a, 'f> Parser<'a, 'f> {
     parse_bin!(LEFT parse_mod, Mod, Mod, "mod", parse_div);
     parse_bin!(LEFT parse_div, Div, "div", parse_power);
     parse_bin!(LEFT parse_power, Power, "**", parse_when);
-    parse_bin!(LEFT parse_when, When, "when", parse_real_to_int); // TODO: rhs can only be a clock expression
+    parse_bin!(LEFT parse_when, rhs = parse_named_clock, When, "when", parse_real_to_int);
     parse_un!(parse_real_to_int, Int, RealToInt, "int", parse_int_to_real);
     parse_un!(
         parse_int_to_real,
@@ -1716,6 +1751,87 @@ impl<'a, 'f> Parser<'a, 'f> {
             ));
         };
         Ok((&toks[1..], Spanned { span, item }))
+    }
+
+    // TODO: a lot of the code is shared with parse_var_decl, maybe
+    // find a nice way to merge the two functions?
+    // adding a boolean parameter won't be enough, as the return types
+    // are not the same
+    // maybe one return type would be enough, since even this method may
+    // give `None` as a value
+    fn parse_valued_var_decl(
+        &mut self,
+        toks: &'a [Tok<'a, 'f>],
+        optional_final_semicolon: bool,
+    ) -> Res<'a, 'f, Vec<Spanned<'f, ValuedVariableDecl<'a, 'f>>>> {
+        let (toks, decls) = self.parse_many(
+            toks,
+            &[TokInfo::Semicolon],
+            |_, t| match t.get(0).map(|t| t.item.clone()) {
+                Some(
+                    TokInfo::Semicolon
+                    | TokInfo::Ident(_)
+                    | TokInfo::Coma
+                    | TokInfo::Colon
+                    | TokInfo::Hat,
+                ) => false,
+                _ => true,
+            },
+            |s, t| {
+                let (t, names) = s.parse_many(
+                    t,
+                    &[TokInfo::Coma],
+                    |_, t| match t.get(0).map(|t| t.item.clone()) {
+                        Some(TokInfo::Ident(_) | TokInfo::Coma) => false,
+                        _ => true,
+                    },
+                    |s, t| {
+                        let (t, var_name) = s.parse_id(t)?;
+                        Ok((t, vec![var_name]))
+                    },
+                )?;
+
+                s.expect(t, TokInfo::Colon, "expected :")?;
+                let t = &t[1..];
+                let (t, ty) = s.parse_ty_expr(t)?;
+                let (t, clock) = if s.expect(t, TokInfo::When, "when").is_ok() {
+                    let (t, clock) = s.parse_clock_expr(&t[1..])?;
+                    (t, Some(clock))
+                } else {
+                    (t, None)
+                };
+
+                let (t, value) = if s.expect(t, TokInfo::Equal, "").is_ok() {
+                    let (t, val) = s.parse_expr(&t[1..])?;
+                    (t, Some(val))
+                } else {
+                    (t, None)
+                };
+
+                Ok((
+                    t,
+                    names
+                        .into_iter()
+                        .map(|name| {
+                            name.map_ref(|_| ValuedVariableDecl {
+                                name: name.clone(),
+                                ty: ty.clone(),
+                                clock: clock.clone(),
+                                value: value.clone(),
+                            })
+                        })
+                        .collect(),
+                ))
+            },
+        )?;
+        let final_semicolon = self.expect(toks, TokInfo::Semicolon, "expected ;");
+        if !optional_final_semicolon && final_semicolon.is_err() {
+            return Err(final_semicolon.unwrap_err());
+        } else if final_semicolon.is_err() {
+            Ok((toks, decls))
+        } else {
+            Ok((&toks[1..], decls))
+        }
     }
 
     fn parse_var_decl(
