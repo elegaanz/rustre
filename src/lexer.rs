@@ -134,6 +134,8 @@ impl<'a, 'f> Lexer<'a, 'f> {
         let mut start = 0;
         let mut end = 0;
         let mut grammar = Grammar::Main;
+        let mut line = 1;
+        let mut col = 0;
         while end < total_len {
             let mut last_span = Span::default();
             let mut last_match = MatchResult::NotYetMatched;
@@ -148,7 +150,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     "(*" => grammar = Grammar::Comment(')'),
                     "\"" => grammar = Grammar::Str,
                     _ => {
-                        last_span = self.span(start, end);
+                        last_span = self.span(line, col, start, last_end - start);
                         last_match = curr_match;
                         curr_match = match grammar {
                             Grammar::InlineComment => self.match_inline_comm(src_slice),
@@ -167,6 +169,21 @@ impl<'a, 'f> Lexer<'a, 'f> {
                 }
             }
 
+            let added_lines = self.src[last_span.start.pos as usize..last_span.end.pos as usize]
+                .chars()
+                .filter(|c| *c == '\n')
+                .count();
+            if added_lines != 0 {
+                line += added_lines;
+                col = 0;
+            }
+            let added_cols = self.src[last_span.start.pos as usize..last_span.end.pos as usize]
+                .lines()
+                .last()
+                .unwrap_or_default()
+                .len();
+            col += added_cols;
+
             if end == total_len + 1 {
                 last_match = curr_match;
             }
@@ -180,7 +197,6 @@ impl<'a, 'f> Lexer<'a, 'f> {
                     end = last_end;
                 }
                 MatchResult::ManyMatches(matches) | MatchResult::Ambiguous(matches) => {
-                    // TODO: the span is incorrect
                     for m in matches {
                         res.push(Spanned {
                             span: last_span.clone(),
@@ -199,7 +215,7 @@ impl<'a, 'f> Lexer<'a, 'f> {
             Err(Error::UnclosedComment)
         } else {
             res.push(Spanned {
-                span: Span::default(),
+                span: self.span(line, col, start, 0),
                 item: TokInfo::EOF,
             });
             Ok(res)
@@ -425,17 +441,17 @@ impl<'a, 'f> Lexer<'a, 'f> {
         }
     }
 
-    fn span(&self, start: usize, end: usize) -> Span {
+    fn span(&self, line: usize, col: usize, pos: usize, len: usize) -> Span {
         Span {
             start: Location {
-                line: 0,
-                col: 0,
-                pos: start as u64,
+                line: line as u64,
+                col: col as u64,
+                pos: pos as u64,
             },
             end: Location {
-                line: 0,
-                col: 0,
-                pos: end as u64,
+                line: line as u64, // no token can be on multiple lines as far as I know
+                col: (col + len) as u64,
+                pos: (pos + len) as u64,
             },
             file: self.file,
         }
