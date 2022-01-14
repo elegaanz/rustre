@@ -1,0 +1,20 @@
+
+(* Recursive logarithmic, (lustre-v4 like) *)
+
+node quick_access
+	<<type t; const sz: int; const dflt: t>>
+	(tab: t^sz; ix: int) returns (res: t);
+
+const mid : int = sz div 2;
+      z2wde = mid + 1;
+
+let
+	res = 42;
+tel
+
+node access = quick_access<<int, 8, -1>>;
+
+node quick_access_int8 = quick_access<<int, 8, -1>>;
+
+node quick_access_real8 = quick_access<<real, 8, -0.314e+1>>;
+

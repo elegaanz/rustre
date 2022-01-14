@@ -108,6 +108,21 @@ pub struct Lexer<'a, 'f> {
     src: &'a str,
 }
 
+#[derive(PartialEq, Debug)]
+enum MatchResult<'a> {
+    NotYetMatched,
+    NoMatches,
+    Ambiguous(Vec<TokInfo<'a>>),
+    Match(LexMatch<'a>),
+    ManyMatches(Vec<TokInfo<'a>>),
+}
+
+#[derive(PartialEq, Debug)]
+enum LexMatch<'a> {
+    Tok(TokInfo<'a>),
+    Comment(&'a str),
+}
+
 impl<'a, 'f> Lexer<'a, 'f> {
     pub fn new(file: &'f str, src: &'a str) -> Self {
         Lexer { file, src }
@@ -115,335 +130,315 @@ impl<'a, 'f> Lexer<'a, 'f> {
 
     pub fn lex(&mut self) -> Result<Vec<Tok>, Error> {
         let total_len = self.src.len();
-        let mut tokens = Vec::with_capacity(self.src.len() / 4);
-        let mut end = self.find_next_delimiter(0);
+        let mut res = Vec::with_capacity(total_len / 4);
+        let mut start = 0;
+        let mut end = 0;
         let mut grammar = Grammar::Main;
-        let mut pos = 0;
-        let mut line = 1;
-        let mut col = 0;
-        while pos < total_len {
-            if total_len > 5000 {
-                // i know the lexer is slow so here is a progress bar
-                print!("\r {} / {}", pos, total_len);
-            }
-            match grammar {
-                Grammar::Main => {
-                    let tok_str = &self.src[pos..end];
-                    if tok_str == "\"" {
-                        grammar = Grammar::Str;
-                    } else if tok_str == "--" {
-                        grammar = Grammar::InlineComment;
-                    } else if tok_str == "/*" {
-                        grammar = Grammar::Comment('/');
-                    } else if tok_str == "(*" {
-                        grammar = Grammar::Comment(')');
-                    } else {
-                        if let Some(tok) = Self::match_tok(self.file, line, col, pos, tok_str) {
-                            tokens.push(tok);
-                            col += (end - pos) as u64;
-                            pos = end;
-                            end = self.find_next_delimiter(pos);
-                        } else {
-                            end = self.next_char(end, -1);
+        while end < total_len {
+            let mut last_span = Span::default();
+            let mut last_match = MatchResult::NotYetMatched;
+            let mut curr_match = MatchResult::NotYetMatched;
+            let mut last_end = end;
+            while end <= total_len && curr_match != MatchResult::NoMatches {
+                let src_slice = &self.src[start..end];
+                match src_slice {
+                    "" => {}
+                    "--" => grammar = Grammar::InlineComment,
+                    "/*" => grammar = Grammar::Comment('/'),
+                    "(*" => grammar = Grammar::Comment(')'),
+                    "\"" => grammar = Grammar::Str,
+                    _ => {
+                        last_span = self.span(start, end);
+                        last_match = curr_match;
+                        curr_match = match grammar {
+                            Grammar::InlineComment => self.match_inline_comm(src_slice),
+                            Grammar::Comment(delim) => self.match_comm(src_slice, delim),
+                            Grammar::Str => self.match_str(src_slice),
+                            Grammar::Main => self.match_tokens(src_slice),
+                        };
+                        if curr_match != MatchResult::NotYetMatched {
+                            grammar = Grammar::Main;
                         }
                     }
                 }
-                Grammar::Str => {
-                    let mut str_end = pos + 1;
-                    let original_line = line;
-                    let original_col = col;
-                    while str_end + 1 < total_len && &self.src[str_end..str_end + 1] != "\"" {
-                        match &self.src[str_end..str_end + 1] {
-                            "\n" => {
-                                col = 0;
-                                line += 1
-                            }
-                            _ => col += 1,
-                        }
-                        str_end += 1;
-                    }
-                    tokens.push(Spanned {
-                        span: Span {
-                            file: self.file,
-                            start: Location {
-                                line: original_line,
-                                col: original_col,
-                                pos: (pos + 1) as u64,
-                            },
-                            end: Location {
-                                line,
-                                col,
-                                pos: str_end as u64,
-                            },
-                        },
-                        item: TokInfo::Str(&self.src[pos + 1..str_end]),
+                if curr_match != MatchResult::NoMatches {
+                    last_end = end;
+                    end = self.next_char(end, 1);
+                }
+            }
+
+            if end == total_len + 1 {
+                last_match = curr_match;
+            }
+
+            match last_match {
+                MatchResult::Match(LexMatch::Tok(m)) => {
+                    res.push(Spanned {
+                        span: last_span.clone(),
+                        item: m,
                     });
-                    pos = str_end + 1;
-                    end = self.find_next_delimiter(pos);
-                    if pos < total_len || &self.src[str_end..str_end + 1] == "\"" {
-                        grammar = Grammar::Main;
+                    end = last_end;
+                }
+                MatchResult::ManyMatches(matches) | MatchResult::Ambiguous(matches) => {
+                    // TODO: the span is incorrect
+                    for m in matches {
+                        res.push(Spanned {
+                            span: last_span.clone(),
+                            item: m,
+                        });
                     }
+                    end = last_end;
                 }
-                Grammar::Comment(end) => {
-                    let mut comm_end = self.next_char(pos, 1);
-                    while self.next_char(comm_end, 1) < total_len
-                        && &self.src[comm_end..self.next_char(comm_end, 2)] != &format!("*{}", end)
-                    {
-                        match &self.src[comm_end..self.next_char(comm_end, 1)] {
-                            "\n" => {
-                                col = 0;
-                                line += 1
-                            }
-                            _ => col += 1,
-                        }
-                        comm_end = self.next_char(comm_end, 1);
-                    }
-                    pos = self.next_char(comm_end, 1);
-                    if pos < total_len {
-                        grammar = Grammar::Main;
-                    }
-                }
-                Grammar::InlineComment => {
-                    let mut comm_end = self.next_char(pos, 1);
-                    while self.next_char(comm_end, 1) < total_len
-                        && &self.src[comm_end..self.next_char(comm_end, 1)] != "\n"
-                    {
-                        match &self.src[comm_end..self.next_char(comm_end, 1)] {
-                            "\n" => {
-                                col = 0;
-                                line += 1
-                            }
-                            _ => col += 1,
-                        }
-                        comm_end = self.next_char(comm_end, 1);
-                    }
-                    pos = comm_end;
-                    grammar = Grammar::Main;
-                }
+                _ => {}
             }
-
-            if pos >= end {
-                if self.next_char(pos, 1) < total_len {
-                    match &self.src[pos..self.next_char(pos, 1)] {
-                        "\n" => {
-                            col = 0;
-                            line += 1
-                        }
-                        _ => col += 1,
-                    };
-                }
-                pos = self.next_char(pos, 1);
-                end = total_len;
-            }
+            start = last_end;
         }
-        match grammar {
-            Grammar::Main | Grammar::InlineComment => {
-                tokens.push(Spanned {
-                    span: Span {
-                        file: self.file,
-                        start: Location {
-                            line,
-                            col,
-                            pos: pos as u64,
-                        },
-                        end: Location {
-                            line,
-                            col,
-                            pos: pos as u64,
-                        },
-                    },
-                    item: TokInfo::EOF,
-                });
-                Ok(tokens)
-            }
-            Grammar::Comment(_) => Err(Error::UnclosedComment),
-            Grammar::Str => Err(Error::UnclosedStr),
+        if grammar == Grammar::Str {
+            Err(Error::UnclosedStr)
+        } else if let Grammar::Comment(_) = grammar {
+            Err(Error::UnclosedComment)
+        } else {
+            res.push(Spanned {
+                span: Span::default(),
+                item: TokInfo::EOF,
+            });
+            Ok(res)
         }
-    }
-
-    fn match_tok(
-        file: &'f str,
-        line: u64,
-        col: u64,
-        pos: usize,
-        src: &'a str,
-    ) -> Option<Spanned<'f, TokInfo<'a>>> {
-        let len = src.len() as u64;
-        let pos = (pos as u64) + len;
-        let col = col + len;
-        match src {
-            "," => Some(Self::token(file, line, col, pos, len, TokInfo::Coma)),
-            ";" => Some(Self::token(file, line, col, pos, len, TokInfo::Semicolon)),
-            "::" => Some(Self::token(file, line, col, pos, len, TokInfo::DoubleColon)),
-            ":" => Some(Self::token(file, line, col, pos, len, TokInfo::Colon)),
-            "->" => Some(Self::token(file, line, col, pos, len, TokInfo::Arrow)),
-            "=>" => Some(Self::token(file, line, col, pos, len, TokInfo::Impl)),
-            "<=" => Some(Self::token(file, line, col, pos, len, TokInfo::Lte)),
-            "<>" => Some(Self::token(file, line, col, pos, len, TokInfo::Neq)),
-            ">=" => Some(Self::token(file, line, col, pos, len, TokInfo::Gte)),
-            ".." => Some(Self::token(file, line, col, pos, len, TokInfo::CDots)),
-            "**" => Some(Self::token(file, line, col, pos, len, TokInfo::Power)),
-            "<<" => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::OpenStaticPar,
-            )),
-            ">>" => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::CloseStaticPar,
-            )),
-            "+" => Some(Self::token(file, line, col, pos, len, TokInfo::Plus)),
-            "^" => Some(Self::token(file, line, col, pos, len, TokInfo::Hat)),
-            "#" => Some(Self::token(file, line, col, pos, len, TokInfo::Sharp)),
-            "-" => Some(Self::token(file, line, col, pos, len, TokInfo::Minus)),
-            "/" => Some(Self::token(file, line, col, pos, len, TokInfo::Slash)),
-            "%" => Some(Self::token(file, line, col, pos, len, TokInfo::Percent)),
-            "*" => Some(Self::token(file, line, col, pos, len, TokInfo::Star)),
-            "|" => Some(Self::token(file, line, col, pos, len, TokInfo::Bar)),
-            "=" => Some(Self::token(file, line, col, pos, len, TokInfo::Equal)),
-            "." => Some(Self::token(file, line, col, pos, len, TokInfo::Dot)),
-            "(" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenPar)),
-            ")" => Some(Self::token(file, line, col, pos, len, TokInfo::ClosePar)),
-            "{" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBrace)),
-            "}" => Some(Self::token(file, line, col, pos, len, TokInfo::CloseBrace)),
-            "[" => Some(Self::token(file, line, col, pos, len, TokInfo::OpenBracket)),
-            "]" => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::CloseBracket,
-            )),
-            "<" => Some(Self::token(file, line, col, pos, len, TokInfo::Lt)),
-            ">" => Some(Self::token(file, line, col, pos, len, TokInfo::Gt)),
-            "extern" => Some(Self::token(file, line, col, pos, len, TokInfo::Extern)),
-            "unsafe" => Some(Self::token(file, line, col, pos, len, TokInfo::Unsafe)),
-            "and" => Some(Self::token(file, line, col, pos, len, TokInfo::And)),
-            "assert" => Some(Self::token(file, line, col, pos, len, TokInfo::Assert)),
-            "bool" => Some(Self::token(file, line, col, pos, len, TokInfo::Bool)),
-            "const" => Some(Self::token(file, line, col, pos, len, TokInfo::Const)),
-            "current" => Some(Self::token(file, line, col, pos, len, TokInfo::Current)),
-            "div" => Some(Self::token(file, line, col, pos, len, TokInfo::Div)),
-            "else" => Some(Self::token(file, line, col, pos, len, TokInfo::Else)),
-            "enum" => Some(Self::token(file, line, col, pos, len, TokInfo::Enum)),
-            "function" => Some(Self::token(file, line, col, pos, len, TokInfo::Function)),
-            "false" => Some(Self::token(file, line, col, pos, len, TokInfo::False)),
-            "if" => Some(Self::token(file, line, col, pos, len, TokInfo::If)),
-            "int" => Some(Self::token(file, line, col, pos, len, TokInfo::Int)),
-            "let" => Some(Self::token(file, line, col, pos, len, TokInfo::Let)),
-            "mod" => Some(Self::token(file, line, col, pos, len, TokInfo::Mod)),
-            "node" => Some(Self::token(file, line, col, pos, len, TokInfo::Node)),
-            "not" => Some(Self::token(file, line, col, pos, len, TokInfo::Not)),
-            "operator" => Some(Self::token(file, line, col, pos, len, TokInfo::Operator)),
-            "or" => Some(Self::token(file, line, col, pos, len, TokInfo::Or)),
-            "nor" => Some(Self::token(file, line, col, pos, len, TokInfo::Nor)),
-            "fby" => Some(Self::token(file, line, col, pos, len, TokInfo::FBy)),
-            "pre" => Some(Self::token(file, line, col, pos, len, TokInfo::Pre)),
-            "real" => Some(Self::token(file, line, col, pos, len, TokInfo::Real)),
-            "returns" => Some(Self::token(file, line, col, pos, len, TokInfo::Returns)),
-            "step" => Some(Self::token(file, line, col, pos, len, TokInfo::Step)),
-            "struct" => Some(Self::token(file, line, col, pos, len, TokInfo::Struct)),
-            "tel" => Some(Self::token(file, line, col, pos, len, TokInfo::Tel)),
-            "type" => Some(Self::token(file, line, col, pos, len, TokInfo::Type)),
-            "then" => Some(Self::token(file, line, col, pos, len, TokInfo::Then)),
-            "true" => Some(Self::token(file, line, col, pos, len, TokInfo::True)),
-            "var" => Some(Self::token(file, line, col, pos, len, TokInfo::Var)),
-            "when" => Some(Self::token(file, line, col, pos, len, TokInfo::When)),
-            "with" => Some(Self::token(file, line, col, pos, len, TokInfo::With)),
-            "xor" => Some(Self::token(file, line, col, pos, len, TokInfo::Xor)),
-            "model" => Some(Self::token(file, line, col, pos, len, TokInfo::Model)),
-            "package" => Some(Self::token(file, line, col, pos, len, TokInfo::Package)),
-            "needs" => Some(Self::token(file, line, col, pos, len, TokInfo::Needs)),
-            "provides" => Some(Self::token(file, line, col, pos, len, TokInfo::Provides)),
-            "uses" => Some(Self::token(file, line, col, pos, len, TokInfo::Uses)),
-            "is" => Some(Self::token(file, line, col, pos, len, TokInfo::Is)),
-            "body" => Some(Self::token(file, line, col, pos, len, TokInfo::Body)),
-            "end" => Some(Self::token(file, line, col, pos, len, TokInfo::End)),
-            "include" => Some(Self::token(file, line, col, pos, len, TokInfo::Include)),
-            "merge" => Some(Self::token(file, line, col, pos, len, TokInfo::Merge)),
-            x if x.chars().all(char::is_numeric) => Some(Self::token(
-                file,
-                line,
-                col,
-                pos,
-                len,
-                TokInfo::IConst(x.parse::<i64>().unwrap()),
-            )),
-            x if x
-                .chars()
-                .all(|c| c.is_numeric() || c == '.' || c == 'e' || c == 'E')
-                && x.chars().any(char::is_numeric)
-                && x.parse::<f64>().is_ok() =>
-            {
-                Some(Self::token(
-                    file,
-                    line,
-                    col,
-                    pos,
-                    len,
-                    TokInfo::RConst(x.parse::<f64>().unwrap()),
-                ))
-            }
-            x if x.chars().all(|c| c.is_alphanumeric() || c == '_') => {
-                Some(Self::token(file, line, col, pos, len, TokInfo::Ident(x)))
-            }
-            _ => None,
-        }
-    }
-
-    fn token(
-        file: &'f str,
-        line: u64,
-        col: u64,
-        pos: u64,
-        len: u64,
-        info: TokInfo<'a>,
-    ) -> Tok<'a, 'f> {
-        Spanned {
-            span: Span {
-                file,
-                start: Location {
-                    line,
-                    col: col - len,
-                    pos: pos - len,
-                },
-                end: Location { line, col, pos },
-            },
-            item: info,
-        }
-    }
-
-    fn find_next_delimiter(&self, pos: usize) -> usize {
-        let src = &self.src[pos..];
-        let mut delim = self.src.len();
-        for pat in [" ", "\t", "\n", "--", "/*", "(*", "\""] {
-            if let Some(pat_pos) = src.find(pat) {
-                // 10 = arbitrary limit considered short enough
-                if pat_pos < 10 {
-                    return pos + pat_pos + pat.len();
-                }
-                if pat_pos + pat.len() < delim {
-                    delim = pos + pat_pos + pat.len();
-                }
-            }
-        }
-        delim
     }
 
     fn next_char(&self, from: usize, add: isize) -> usize {
+        Self::next_char_in(self.src, from, add)
+    }
+
+    fn next_char_in(src: &str, from: usize, add: isize) -> usize {
         let mut new_pos = (from as isize) + add;
-        while !self.src.is_char_boundary(new_pos as usize) && (new_pos as usize) < self.src.len() {
-            new_pos += add;
+        while !src.is_char_boundary(new_pos as usize) && (new_pos as usize) < src.len() {
+            new_pos += add.signum();
         }
         new_pos as usize
+    }
+
+    fn match_inline_comm(&self, src_slice: &'a str) -> MatchResult<'a> {
+        let len = src_slice.len();
+        let start = Self::next_char_in(src_slice, len, -1);
+        if &src_slice[start..] == "\n" {
+            MatchResult::Match(LexMatch::Comment(&src_slice[2..]))
+        } else {
+            MatchResult::NotYetMatched
+        }
+    }
+
+    fn match_comm(&self, src_slice: &'a str, delim: char) -> MatchResult<'a> {
+        let end = format!("*{}", delim);
+        let len = src_slice.len();
+        let start = Self::next_char_in(src_slice, len, -2);
+        if &src_slice[start..] == &end {
+            MatchResult::Match(LexMatch::Comment(&src_slice[2..start]))
+        } else {
+            MatchResult::NotYetMatched
+        }
+    }
+
+    fn match_str(&self, src_slice: &'a str) -> MatchResult<'a> {
+        let len = src_slice.len();
+        let start = Self::next_char_in(src_slice, len, -1);
+        if &src_slice[start..] == "\"" {
+            MatchResult::Match(LexMatch::Tok(TokInfo::Str(&src_slice[1..start])))
+        } else {
+            MatchResult::NotYetMatched
+        }
+    }
+
+    fn match_tokens(&self, src_slice: &'a str) -> MatchResult<'a> {
+        match src_slice {
+            " " | "\t" | "\n" | "\r" => MatchResult::NoMatches,
+            "," => MatchResult::Match(LexMatch::Tok(TokInfo::Coma)),
+            ";" => MatchResult::Match(LexMatch::Tok(TokInfo::Semicolon)),
+            "::" => MatchResult::Match(LexMatch::Tok(TokInfo::DoubleColon)),
+            ":" => MatchResult::Match(LexMatch::Tok(TokInfo::Colon)),
+            "->" => MatchResult::Match(LexMatch::Tok(TokInfo::Arrow)),
+            "=>" => MatchResult::Match(LexMatch::Tok(TokInfo::Impl)),
+            "<=" => MatchResult::Match(LexMatch::Tok(TokInfo::Lte)),
+            "<>" => MatchResult::Match(LexMatch::Tok(TokInfo::Neq)),
+            ">=" => MatchResult::Match(LexMatch::Tok(TokInfo::Gte)),
+            ".." => MatchResult::Match(LexMatch::Tok(TokInfo::CDots)),
+            "**" => MatchResult::Match(LexMatch::Tok(TokInfo::Power)),
+            "<<" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenStaticPar)),
+            ">>" => MatchResult::Match(LexMatch::Tok(TokInfo::CloseStaticPar)),
+            "+" => MatchResult::Match(LexMatch::Tok(TokInfo::Plus)),
+            "^" => MatchResult::Match(LexMatch::Tok(TokInfo::Hat)),
+            "#" => MatchResult::Match(LexMatch::Tok(TokInfo::Sharp)),
+            "-" => MatchResult::Ambiguous(vec![TokInfo::Minus]),
+            "/" => MatchResult::Match(LexMatch::Tok(TokInfo::Slash)),
+            "%" => MatchResult::Match(LexMatch::Tok(TokInfo::Percent)),
+            "*" => MatchResult::Match(LexMatch::Tok(TokInfo::Star)),
+            "|" => MatchResult::Match(LexMatch::Tok(TokInfo::Bar)),
+            "=" => MatchResult::Match(LexMatch::Tok(TokInfo::Equal)),
+            "." => MatchResult::Match(LexMatch::Tok(TokInfo::Dot)),
+            "(" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenPar)),
+            ")" => MatchResult::Match(LexMatch::Tok(TokInfo::ClosePar)),
+            "{" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenBrace)),
+            "}" => MatchResult::Match(LexMatch::Tok(TokInfo::CloseBrace)),
+            "[" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenBracket)),
+            "]" => MatchResult::Match(LexMatch::Tok(TokInfo::CloseBracket)),
+            "<" => MatchResult::Match(LexMatch::Tok(TokInfo::Lt)),
+            ">" => MatchResult::Match(LexMatch::Tok(TokInfo::Gt)),
+            "extern" => MatchResult::Match(LexMatch::Tok(TokInfo::Extern)),
+            "unsafe" => MatchResult::Match(LexMatch::Tok(TokInfo::Unsafe)),
+            "and" => MatchResult::Match(LexMatch::Tok(TokInfo::And)),
+            "assert" => MatchResult::Match(LexMatch::Tok(TokInfo::Assert)),
+            "bool" => MatchResult::Match(LexMatch::Tok(TokInfo::Bool)),
+            "const" => MatchResult::Match(LexMatch::Tok(TokInfo::Const)),
+            "current" => MatchResult::Match(LexMatch::Tok(TokInfo::Current)),
+            "div" => MatchResult::Match(LexMatch::Tok(TokInfo::Div)),
+            "else" => MatchResult::Match(LexMatch::Tok(TokInfo::Else)),
+            "enum" => MatchResult::Match(LexMatch::Tok(TokInfo::Enum)),
+            "function" => MatchResult::Match(LexMatch::Tok(TokInfo::Function)),
+            "false" => MatchResult::Match(LexMatch::Tok(TokInfo::False)),
+            "if" => MatchResult::Match(LexMatch::Tok(TokInfo::If)),
+            "int" => MatchResult::Match(LexMatch::Tok(TokInfo::Int)),
+            "let" => MatchResult::Match(LexMatch::Tok(TokInfo::Let)),
+            "mod" => MatchResult::Match(LexMatch::Tok(TokInfo::Mod)),
+            "node" => MatchResult::Match(LexMatch::Tok(TokInfo::Node)),
+            "not" => MatchResult::Match(LexMatch::Tok(TokInfo::Not)),
+            "operator" => MatchResult::Match(LexMatch::Tok(TokInfo::Operator)),
+            "or" => MatchResult::Match(LexMatch::Tok(TokInfo::Or)),
+            "nor" => MatchResult::Match(LexMatch::Tok(TokInfo::Nor)),
+            "fby" => MatchResult::Match(LexMatch::Tok(TokInfo::FBy)),
+            "pre" => MatchResult::Match(LexMatch::Tok(TokInfo::Pre)),
+            "real" => MatchResult::Match(LexMatch::Tok(TokInfo::Real)),
+            "returns" => MatchResult::Match(LexMatch::Tok(TokInfo::Returns)),
+            "step" => MatchResult::Match(LexMatch::Tok(TokInfo::Step)),
+            "struct" => MatchResult::Match(LexMatch::Tok(TokInfo::Struct)),
+            "tel" => MatchResult::Match(LexMatch::Tok(TokInfo::Tel)),
+            "type" => MatchResult::Match(LexMatch::Tok(TokInfo::Type)),
+            "then" => MatchResult::Match(LexMatch::Tok(TokInfo::Then)),
+            "true" => MatchResult::Match(LexMatch::Tok(TokInfo::True)),
+            "var" => MatchResult::Match(LexMatch::Tok(TokInfo::Var)),
+            "when" => MatchResult::Match(LexMatch::Tok(TokInfo::When)),
+            "with" => MatchResult::Match(LexMatch::Tok(TokInfo::With)),
+            "xor" => MatchResult::Match(LexMatch::Tok(TokInfo::Xor)),
+            "model" => MatchResult::Match(LexMatch::Tok(TokInfo::Model)),
+            "package" => MatchResult::Match(LexMatch::Tok(TokInfo::Package)),
+            "needs" => MatchResult::Match(LexMatch::Tok(TokInfo::Needs)),
+            "provides" => MatchResult::Match(LexMatch::Tok(TokInfo::Provides)),
+            "uses" => MatchResult::Match(LexMatch::Tok(TokInfo::Uses)),
+            "is" => MatchResult::Match(LexMatch::Tok(TokInfo::Is)),
+            "body" => MatchResult::Match(LexMatch::Tok(TokInfo::Body)),
+            "end" => MatchResult::Match(LexMatch::Tok(TokInfo::End)),
+            "include" => MatchResult::Match(LexMatch::Tok(TokInfo::Include)),
+            "merge" => MatchResult::Match(LexMatch::Tok(TokInfo::Merge)),
+            x if x.chars().all(char::is_numeric) => {
+                MatchResult::Match(LexMatch::Tok(TokInfo::IConst(x.parse::<i64>().unwrap())))
+            }
+            x if x.chars().all(|c| {
+                c.is_numeric() || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-'
+            }) && x.chars().any(char::is_numeric)
+                && (!(x.contains('+') || x.contains('-'))
+                    || x.contains("e-")
+                    || x.contains("e+")
+                    || x.contains("E+")
+                    || x.contains("E-")) =>
+            {
+                // Maybe we are parsing something like `1..2`
+                if x.ends_with('.') {
+                    if x.ends_with("..") {
+                        MatchResult::ManyMatches(vec![
+                            TokInfo::IConst(x[..x.len() - 2].parse::<i64>().unwrap()),
+                            TokInfo::CDots,
+                        ])
+                    } else {
+                        MatchResult::Ambiguous(vec![TokInfo::RConst(x.parse::<f64>().unwrap())])
+                    }
+                } else if x.contains("..") {
+                    MatchResult::NoMatches
+                } else if x.starts_with('e') || x.starts_with('E') {
+                    MatchResult::Match(LexMatch::Tok(TokInfo::Ident(x)))
+                } else if x.ends_with('e') || x.ends_with('E') {
+                    MatchResult::NotYetMatched
+                } else if x.ends_with('-') {
+                    let mut tokens = Vec::with_capacity(2);
+                    match self.match_tokens(&x[..x.len() - 1]) {
+                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
+                            tokens.append(t)
+                        }
+                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
+                        _ => {}
+                    }
+                    tokens.push(TokInfo::Minus);
+                    MatchResult::Ambiguous(tokens)
+                } else if x.ends_with('+') {
+                    let mut tokens = Vec::with_capacity(2);
+                    match self.match_tokens(&x[..x.len() - 1]) {
+                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
+                            tokens.append(t)
+                        }
+                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
+                        _ => {}
+                    }
+                    tokens.push(TokInfo::Plus);
+                    MatchResult::Ambiguous(tokens)
+                } else if x.starts_with('-') {
+                    let mut tokens = Vec::with_capacity(2);
+                    tokens.push(TokInfo::Minus);
+                    match self.match_tokens(&x[1..]) {
+                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
+                            tokens.append(t)
+                        }
+                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
+                        _ => {}
+                    }
+                    MatchResult::ManyMatches(tokens)
+                } else if x.starts_with('+') {
+                    let mut tokens = Vec::with_capacity(2);
+                    tokens.push(TokInfo::Plus);
+                    match self.match_tokens(&x[1..]) {
+                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
+                            tokens.append(t)
+                        }
+                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
+                        _ => {}
+                    }
+                    MatchResult::ManyMatches(tokens)
+                } else {
+                    MatchResult::Match(LexMatch::Tok(TokInfo::RConst(x.parse::<f64>().unwrap())))
+                }
+            }
+            x if x.chars().all(|c| c.is_alphanumeric() || c == '_') => {
+                MatchResult::Match(LexMatch::Tok(TokInfo::Ident(x)))
+            }
+            // yet another special case for real constants
+            // this one is for handling things like: 1->pre x
+            x if x.ends_with("->") => {
+                let mut tokens = Vec::with_capacity(2);
+                match self.match_tokens(&x[..x.len() - 2]) {
+                    MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
+                        tokens.append(t)
+                    }
+                    MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
+                    _ => {}
+                }
+                tokens.push(TokInfo::Arrow);
+                MatchResult::ManyMatches(tokens)
+            }
+            _ => MatchResult::NoMatches,
+        }
+    }
+
+    fn span(&self, start: usize, end: usize) -> Span {
+        Span {
+            start: Location {
+                line: 0,
+                col: 0,
+                pos: start as u64,
+            },
+            end: Location {
+                line: 0,
+                col: 0,
+                pos: end as u64,
+            },
+            file: self.file,
+        }
     }
 }
 
@@ -474,6 +469,21 @@ mod tests {
     #[test]
     fn test_keyword() {
         test_lexer("function", vec![TokInfo::Function, TokInfo::EOF])
+    }
+
+    #[test]
+    fn test_arrow() {
+        test_lexer(
+            "y=0->pre",
+            vec![
+                TokInfo::Ident("y"),
+                TokInfo::Equal,
+                TokInfo::IConst(0),
+                TokInfo::Arrow,
+                TokInfo::Pre,
+                TokInfo::EOF,
+            ],
+        )
     }
 
     #[test]
@@ -567,6 +577,22 @@ mod tests {
                 TokInfo::EOF,
             ],
         );
+    }
+
+    #[test]
+    fn test_const_slice() {
+        test_lexer(
+            "a[1..2]",
+            vec![
+                TokInfo::Ident("a"),
+                TokInfo::OpenBracket,
+                TokInfo::IConst(1),
+                TokInfo::CDots,
+                TokInfo::IConst(2),
+                TokInfo::CloseBracket,
+                TokInfo::EOF,
+            ],
+        )
     }
 
     #[test]

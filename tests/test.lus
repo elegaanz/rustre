@@ -1,27 +1,32 @@
-include "other.lus"
+-- include "other.lus"
 
-type st = struct { a, b : int; f : real };
-type en = enum { a, b, c };
+-- type st = struct { a, b : int; f : real };
+-- type en = enum { a, b, c };
+-- 
+-- const n = 12;
+-- 
+-- const f = 33.3;
+-- 
+-- function a = b;
+-- 
+-- node c(a : int) returns (x, t : int)
+-- let
+--     x = a -> if true then 42 * 7 + 3 else 0;
+--     t = if true then 0 -> a else 1 -> 2*a;
+-- tel;
+-- 
+-- function b(x : int; z : bool^4) returns (y : int)
+-- let
+--     y = x + 12;
+-- tel;
+-- 
+-- function generic<<const n : int; function a (k : int) returns (j : int)>>() returns (b : int)
+-- let
+--     a = #(a, b, c);
+--     b = a xor b xor c;
+--     c = nor(a, b, c);
+-- tel
 
-const n = 12;
+-- type a = int^2;
 
-const f = 33.3;
-
-function a = b;
-
-function c() returns (x : int)
-let
-    x = 42 * 7 + 3;
-tel;
-
-function b(x : int; z : bool^4) returns (y : int)
-let
-    y = x + 12;
-tel;
-
-function generic<<const n : int; function a (k : int) returns (j : int)>>() returns (b : int)
-let
-    a = #(a, b, c);
-    b = a xor b xor c;
-    c = nor(a, b, c);
-tel
+const x = a[42][12];
