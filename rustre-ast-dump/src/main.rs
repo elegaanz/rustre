@@ -1,11 +1,9 @@
 use ariadne::{Label, Report, ReportKind};
 
-mod lexer;
-mod location;
-mod parser;
+use rustre_parser::*;
 
 fn main() {
-    let file = std::env::args().nth(1).unwrap();
+    let file = std::env::args().nth(1).expect("please give a file name");
     let contents = std::fs::read_to_string(&file).unwrap();
     let mut lexer = lexer::Lexer::new(&file, &contents);
     let lex = lexer.lex().unwrap();

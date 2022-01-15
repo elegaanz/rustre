@@ -12,11 +12,16 @@ dependencies = [
 ]
 
 [[package]]
-name = "lustrs"
+name = "rustre-ast-dump"
 version = "0.1.0"
 dependencies = [
  "ariadne",
+ "rustre-parser",
 ]
+
+[[package]]
+name = "rustre-parser"
+version = "0.1.0"
 
 [[package]]
 name = "yansi"
