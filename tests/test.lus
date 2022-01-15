@@ -29,4 +29,15 @@
 
 -- type a = int^2;
 
-const x = a[42][12];
+node a(x : int) returns (y : int)
+let
+    y = x;
+tel
+
+node b(x : bool^4) returns (y : bool)
+let
+    y = x[5];
+tel
+
+-- const a: bool^80^10;
+-- const x = a[42][12];
