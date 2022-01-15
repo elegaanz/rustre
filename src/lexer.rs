@@ -1,8 +1,10 @@
 use crate::location::{Location, Span, Spanned};
 
+/// A spanned token
 pub type Tok<'a, 'f> = Spanned<'f, TokInfo<'a>>;
 
 #[derive(Clone, Debug, PartialEq)]
+/// A token
 pub enum TokInfo<'a> {
     EOF,
     Extern,
@@ -35,7 +37,6 @@ pub enum TokInfo<'a> {
     Hat,
     IConst(i64),
     Ident(&'a str),
-    // LongIdent,
     If,
     Impl,
     Int,
@@ -98,11 +99,13 @@ enum Grammar {
 
 #[cfg_attr(test, derive(PartialEq))]
 #[derive(Debug)]
+/// Lexing error
 pub enum Error {
     UnclosedStr,
     UnclosedComment,
 }
 
+/// A lexer for Lustre v6 files
 pub struct Lexer<'a, 'f> {
     file: &'f str,
     src: &'a str,
@@ -124,10 +127,17 @@ enum LexMatch<'a> {
 }
 
 impl<'a, 'f> Lexer<'a, 'f> {
+    /// Initializes a new lexer
+    ///
+    /// # Parameters
+    ///
+    /// - `file`: the path of the file
+    /// - `src`: the contents of the file
     pub fn new(file: &'f str, src: &'a str) -> Self {
         Lexer { file, src }
     }
 
+    /// Generates a list of tokens from the file
     pub fn lex(&mut self) -> Result<Vec<Tok>, Error> {
         let total_len = self.src.len();
         let mut res = Vec::with_capacity(total_len / 4);
