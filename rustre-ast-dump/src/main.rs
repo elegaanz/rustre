@@ -5,7 +5,7 @@ use rustre_parser::*;
 fn main() {
     let file = std::env::args().nth(1).expect("please give a file name");
     let contents = std::fs::read_to_string(&file).unwrap();
-    let mut lexer = lexer::Lexer::new(&file, &contents);
+    /*let mut lexer = lexer::Lexer::new(&file, &contents);
     let lex = lexer.lex().unwrap();
     let mut parser = parser::Parser::new();
     let ast = parser.parse(&lex);
@@ -22,9 +22,9 @@ fn main() {
             println!("{:#?}", ast)
         }
         Err(e) => print_err(e, &contents),
-    }
+    }*/
 }
-
+/*
 fn print_err<'a, 'f>(err: parser::Error<'a, 'f>, contents: &'a str) {
     match err {
         parser::Error::UnexpectedToken(toks, exp) => {
@@ -62,3 +62,4 @@ fn print_err<'a, 'f>(err: parser::Error<'a, 'f>, contents: &'a str) {
         parser::Error::ReportedError => {}
     }
 }
+*/

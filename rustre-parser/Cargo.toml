@@ -7,3 +7,4 @@ license = "GPL-3.0"
 repository = "https://github.com/elegaanz/rustre"
 
 [dependencies]
+logos = "0.12.1"
