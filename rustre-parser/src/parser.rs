@@ -65,6 +65,33 @@ impl<'a> Parser<'a> {
         self.next();
         self.end();
     }
+
+    fn error_until(&mut self, msg: &str, stop: &[Token]) {
+        self.start(Error);
+        self.errors.push(msg.to_owned());
+        loop {
+            if let Some(curr) = self.current() {
+                if stop.contains(&curr) {
+                    break;
+                }
+                self.next();
+            } else {
+                break;
+            }
+        }
+        self.end();
+    }
+
+    fn peek<const N: usize>(&self) -> [Token; N] {
+        let start = self.tokens.len() - 1 - N;
+        self.tokens
+            .iter()
+            .map(|(t, _)| *t)
+            .skip(start)
+            .collect::<Vec<_>>()[..]
+            .try_into()
+            .unwrap()
+    }
 }
 
 /// Actual parsing rules
@@ -110,10 +137,38 @@ impl<'a> Parser<'a> {
     }
 
     fn package_list(&mut self) {
-        self.next() // TODO
+        loop {
+            self.skip_trivia();
+            match self.current() {
+                Some(Model) => {
+                    self.model_decl();
+                }
+                Some(Package) => {
+                    if self.peek() == [Equal] || self.peek() == [Is] {
+                        self.package_eq();
+                    } else {
+                        self.package_decl();
+                    }
+                }
+                Some(_) => self.error_until("unexpected token", &[Model, Package]),
+                None => return,
+            }
+        }
     }
 
     fn package_body(&mut self) {
         self.next() // TODO
+    }
+
+    fn model_decl(&mut self) {
+        self.next()
+    }
+
+    fn package_eq(&mut self) {
+        self.next()
+    }
+
+    fn package_decl(&mut self) {
+        self.next()
     }
 }
