@@ -244,14 +244,14 @@ pub enum Token {
     #[token("include")]
     Include,
 
-    #[regex(r#""[^"]+""#)]
+    #[regex(r#""([^"]|\\")*""#)]
     Str,
 
     #[regex(r"--.*\n")]
     InlineComment,
 
-    // TODO: better handle that when logos support contexts
-    #[regex(r"/\*[^*/]*\*/|\(\*[a-zA-Z \n0-9_()]+\*\)")]
+    #[regex(r"/\*([^*]|\*[^/])*\*/")]
+    #[regex(r"\(\*([^*]|\*[^\)])*\*\)")]
     Comment,
 
     #[error]
