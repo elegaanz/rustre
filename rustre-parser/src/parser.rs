@@ -241,11 +241,11 @@ impl<'a> Parser<'a> {
     }
 
     fn package_eq(&mut self) {
-        self.next()
+        self.error("TODO: package alias")
     }
 
     fn package_decl(&mut self) {
-        self.next()
+        self.error("TODO: package declaration")
     }
 
     fn ident(&mut self) {
@@ -254,19 +254,19 @@ impl<'a> Parser<'a> {
     }
 
     fn uses(&mut self) {
-        self.next()
+        self.error("TODO: uses")
     }
 
     fn static_params_decl(&mut self) {
-        self.next()
+        self.error("TODO: static params decl")
     }
 
     fn provides(&mut self) {
-        self.next()
+        self.error("TODO: provides")
     }
 
     fn const_decls(&mut self) -> bool {
-        self.next();
+        self.error("TODO: const decls");
         false
     }
 
@@ -328,27 +328,27 @@ impl<'a> Parser<'a> {
     fn param_decl(&mut self) {
         self.start(ParamDecl);
         self.expect(OpenPar);
-        // TODO
+        self.error("TODO: param decl");
         self.end();
     }
 
     fn node_body(&mut self) {
         self.expect(Let);
-        // TODO
+        self.error("TODO: node body");
         self.expect(Tel);
         self.accept(Semicolon);
     }
 
     fn var_decls(&mut self) -> bool {
-        self.next();
+        self.error("TODO: var decls");
         false
     }
 
     fn returns(&mut self) {
-        self.next()
+        self.error("TODO: returns")
     }
 
     fn effective_node(&mut self) {
-        self.next()
+        self.error("TODO: effective node")
     }
 }
