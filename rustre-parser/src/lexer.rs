@@ -276,6 +276,7 @@ pub enum Token {
     PackageDecl,
     /// Children: ModelDecl, PackageDecl, PackageAlias
     PackageList,
+    ParamDecl,
 }
 
 impl From<Token> for rowan::SyntaxKind {

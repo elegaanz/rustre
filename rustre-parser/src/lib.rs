@@ -3,10 +3,15 @@ pub mod lexer;
 pub mod location;
 pub mod parser;
 
+use std::ops::Range;
+
 use lexer::LustreLang;
 use logos::Logos;
 
-type Error = String;
+pub struct Error {
+    pub span: Range<usize>,
+    pub msg: String,
+}
 
 pub type SyntaxNode = rowan::SyntaxNode<LustreLang>;
 pub type SyntaxToken = rowan::SyntaxToken<LustreLang>;

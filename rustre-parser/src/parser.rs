@@ -12,6 +12,7 @@ pub struct Parser<'a> {
     tokens: Vec<(Token, &'a str)>,
     builder: GreenNodeBuilder<'static>,
     errors: Vec<super::Error>,
+    pos: usize,
 }
 
 /// Utils
@@ -21,6 +22,7 @@ impl<'a> Parser<'a> {
             tokens,
             errors: Vec::new(),
             builder: GreenNodeBuilder::new(),
+            pos: 0,
         };
 
         parser.file();
@@ -54,21 +56,26 @@ impl<'a> Parser<'a> {
 
     fn next(&mut self) {
         if let Some((tok, source)) = self.tokens.pop() {
+            self.pos += source.len();
             self.builder.token(tok.into(), source);
         }
     }
 
     /// Reports an error and skips one token
-    fn error(&mut self, msg: &str) {
+    fn error<S: ToString>(&mut self, msg: S) {
         self.start(Error);
-        self.errors.push(msg.to_owned());
+        self.errors.push(super::Error {
+            msg: msg.to_string(),
+            span: self.start_pos()..self.end_pos(),
+        });
         self.next();
         self.end();
     }
 
     fn error_until(&mut self, msg: &str, stop: &[Token]) {
         self.start(Error);
-        self.errors.push(msg.to_owned());
+        let start = self.start_pos();
+
         loop {
             if let Some(curr) = self.current() {
                 if stop.contains(&curr) {
@@ -79,6 +86,11 @@ impl<'a> Parser<'a> {
                 break;
             }
         }
+
+        self.errors.push(super::Error {
+            msg: msg.to_owned(),
+            span: start..self.end_pos(),
+        });
         self.end();
     }
 
@@ -97,8 +109,12 @@ impl<'a> Parser<'a> {
     /// moves to the next token if it matched
     fn expect(&mut self, expected: Token) {
         self.skip_trivia();
-        if self.current() != Some(expected) {
-            self.error("Unexpected token");
+        let current = self.current();
+        if current != Some(expected) {
+            self.error(format!(
+                "Unexpected token: {:?} (expected {:?})",
+                current, expected
+            ));
         } else {
             self.next()
         }
@@ -113,7 +129,17 @@ impl<'a> Parser<'a> {
             self.next();
         }
     }
+
+    fn start_pos(&self) -> usize {
+        self.pos
+    }
+
+    fn end_pos(&self) -> usize {
+        self.pos + self.tokens.last().map(|x| x.1.len()).unwrap_or(0)
+    }
 }
+
+static NEW_DECL: &'static [Token] = &[Const, Type, Node, Unsafe, Extern, Function, End];
 
 /// Actual parsing rules
 impl<'a> Parser<'a> {
@@ -136,8 +162,8 @@ impl<'a> Parser<'a> {
                 self.skip_trivia();
                 match self.current() {
                     Some(Str) => self.next(),
-                    Some(_) => self.error("unexpected token"),
-                    None => self.error("unexpected end of file"),
+                    Some(_) => self.error("Unexpected token: expected a string literal"),
+                    None => self.error("Unexpected end of file"),
                 }
                 self.end();
                 true
@@ -172,7 +198,9 @@ impl<'a> Parser<'a> {
                         self.package_decl();
                     }
                 }
-                Some(_) => self.error_until("unexpected token", &[Model, Package]),
+                Some(_) => {
+                    self.error_until("Expected a package or model declaration", &[Model, Package])
+                }
                 None => {
                     self.end();
                     return;
@@ -186,11 +214,13 @@ impl<'a> Parser<'a> {
         loop {
             self.skip_trivia();
             match self.current() {
-                Some(Const) => self.const_decls(),
+                Some(Const) => {
+                    self.const_decls();
+                }
                 Some(Node) | Some(Unsafe) | Some(Extern) | Some(Function) => self.node_decl(),
                 Some(Type) => self.type_decls(),
                 Some(End) | None => break,
-                _ => self.error_until("unexpected token", &[Const, Node, Type, End]),
+                _ => self.error_until("Expected a declaration", NEW_DECL),
             }
         }
         self.end();
@@ -235,15 +265,90 @@ impl<'a> Parser<'a> {
         self.next()
     }
 
-    fn const_decls(&mut self) {
-        self.next()
+    fn const_decls(&mut self) -> bool {
+        self.next();
+        false
     }
 
     fn node_decl(&mut self) {
-        self.next()
+        self.start(NodeDecl);
+        self.accept(Unsafe);
+        self.accept(Extern);
+        if self.current() != Some(Node) && self.current() != Some(Function) {
+            self.error_until("Expected node or function keyword", NEW_DECL);
+        }
+        self.next();
+        self.ident();
+        self.skip_trivia();
+        if self.current() == Some(OpenStaticPar) {
+            self.paren_static_param_decl();
+        }
+        self.skip_trivia();
+        if self.current() == Some(OpenPar) {
+            self.param_decl();
+            self.returns();
+        }
+
+        self.skip_trivia();
+        match self.current() {
+            // external or normal node
+            Some(Semicolon) => {
+                self.next();
+                while self.var_decls() || self.const_decls() {}
+                self.skip_trivia();
+                if self.current() == Some(Let) {
+                    self.node_body();
+                }
+            }
+            // alias node
+            Some(Equal) => {
+                self.effective_node();
+                self.accept(Semicolon); // TODO: isn't it mandatory?
+            }
+            _ => self.error_until("Expected a semicolon or a node alias", NEW_DECL),
+        }
+
+        self.end();
     }
 
     fn type_decls(&mut self) {
+        self.next()
+    }
+
+    /// Static parameters declaration, with surrrounding "static parenthesis" (<< and >>).
+    ///
+    /// Self::static_param_decl only parses the inner list of paramater, because it is useful
+    /// in other places, where there are no << >>
+    fn paren_static_param_decl(&mut self) {
+        self.expect(OpenStaticPar);
+        self.static_params_decl();
+        self.expect(CloseStaticPar);
+    }
+
+    fn param_decl(&mut self) {
+        self.start(ParamDecl);
+        self.expect(OpenPar);
+        // TODO
+        self.end();
+    }
+
+    fn node_body(&mut self) {
+        self.expect(Let);
+        // TODO
+        self.expect(Tel);
+        self.accept(Semicolon);
+    }
+
+    fn var_decls(&mut self) -> bool {
+        self.next();
+        false
+    }
+
+    fn returns(&mut self) {
+        self.next()
+    }
+
+    fn effective_node(&mut self) {
         self.next()
     }
 }
