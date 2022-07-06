@@ -92,6 +92,27 @@ impl<'a> Parser<'a> {
             .try_into()
             .unwrap()
     }
+
+    /// Report an error if the current token is not the expected one,
+    /// moves to the next token if it matched
+    fn expect(&mut self, expected: Token) {
+        self.skip_trivia();
+        if self.current() != Some(expected) {
+            self.error("Unexpected token");
+        } else {
+            self.next()
+        }
+    }
+
+    /// Advance only if the next token is the given one
+    ///
+    /// Allows for optionally matching a token
+    fn accept(&mut self, tok: Token) {
+        self.skip_trivia();
+        if self.current() == Some(tok) {
+            self.next();
+        }
+    }
 }
 
 /// Actual parsing rules
@@ -137,6 +158,7 @@ impl<'a> Parser<'a> {
     }
 
     fn package_list(&mut self) {
+        self.start(PackageList);
         loop {
             self.skip_trivia();
             match self.current() {
@@ -151,17 +173,41 @@ impl<'a> Parser<'a> {
                     }
                 }
                 Some(_) => self.error_until("unexpected token", &[Model, Package]),
-                None => return,
+                None => {
+                    self.end();
+                    return;
+                }
             }
         }
     }
 
     fn package_body(&mut self) {
-        self.next() // TODO
+        self.start(PackageBody);
+        loop {
+            self.skip_trivia();
+            match self.current() {
+                Some(Const) => self.const_decls(),
+                Some(Node) | Some(Unsafe) | Some(Extern) | Some(Function) => self.node_decl(),
+                Some(Type) => self.type_decls(),
+                Some(End) | None => break,
+                _ => self.error_until("unexpected token", &[Const, Node, Type, End]),
+            }
+        }
+        self.end();
     }
 
     fn model_decl(&mut self) {
-        self.next()
+        self.start(ModelDecl);
+        self.expect(Model);
+        self.ident();
+        self.uses();
+        self.expect(Needs);
+        self.static_params_decl();
+        self.provides();
+        self.expect(Body);
+        self.package_body();
+        self.expect(End);
+        self.end();
     }
 
     fn package_eq(&mut self) {
@@ -169,6 +215,35 @@ impl<'a> Parser<'a> {
     }
 
     fn package_decl(&mut self) {
+        self.next()
+    }
+
+    fn ident(&mut self) {
+        // TODO: qualified idents
+        self.expect(Ident);
+    }
+
+    fn uses(&mut self) {
+        self.next()
+    }
+
+    fn static_params_decl(&mut self) {
+        self.next()
+    }
+
+    fn provides(&mut self) {
+        self.next()
+    }
+
+    fn const_decls(&mut self) {
+        self.next()
+    }
+
+    fn node_decl(&mut self) {
+        self.next()
+    }
+
+    fn type_decls(&mut self) {
         self.next()
     }
 }

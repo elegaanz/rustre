@@ -258,8 +258,14 @@ pub enum Token {
     Error,
 
     // Composite nodes
+    /// Children: IncludeStatement + PackageList or PackageBody
     Root,
+    /// Children: Include + String
     IncludeStatement,
+    /// A list of declarations
+    ///
+    /// Children: ConstantDecl, TypeDecl, ExternalNodeDecl, NodeDecl
+    PackageBody,
     ConstantDecl,
     TypeDecl,
     ExternalNodeDecl,
@@ -268,6 +274,8 @@ pub enum Token {
     ModelDecl,
     PackageAlias,
     PackageDecl,
+    /// Children: ModelDecl, PackageDecl, PackageAlias
+    PackageList,
 }
 
 impl From<Token> for rowan::SyntaxKind {
