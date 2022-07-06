@@ -1,7 +1,8 @@
 use logos::Logos;
 
-#[derive(Logos, Debug, PartialEq)]
+#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
 /// A token
+#[repr(u16)]
 pub enum Token {
     #[regex("[ \t\n\r]")]
     Space,
@@ -255,6 +256,38 @@ pub enum Token {
 
     #[error]
     Error,
+
+    // Composite nodes
+    Root,
+    IncludeStatement,
+    ConstantDecl,
+    TypeDecl,
+    ExternalNodeDecl,
+    NodeDecl,
+    NodeAlias,
+    ModelDecl,
+    PackageAlias,
+    PackageDecl,
+}
+
+impl From<Token> for rowan::SyntaxKind {
+    fn from(tok: Token) -> Self {
+        Self(tok as u16)
+    }
+}
+
+#[derive(Hash, Ord, PartialOrd, PartialEq, Eq, Debug, Copy, Clone)]
+pub enum LustreLang {}
+impl rowan::Language for LustreLang {
+    type Kind = Token;
+
+    fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
+        unsafe { std::mem::transmute::<u16, Token>(raw.0) }
+    }
+
+    fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
+        kind.into()
+    }
 }
 
 #[cfg(test)]

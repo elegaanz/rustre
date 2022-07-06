@@ -8,3 +8,4 @@ edition = "2021"
 [dependencies]
 ariadne = "0.1"
 rustre-parser = { path = "../rustre-parser" }
+rowan = "0.15.5"
