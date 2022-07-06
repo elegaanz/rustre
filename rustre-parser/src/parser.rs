@@ -73,7 +73,7 @@ impl<'a> Parser<'a> {
         self.start(Root);
 
         while self.include_statement() {}
-        while self.declarations() {}
+        while self.toplevel_decl() {}
 
         self.end();
     }
@@ -98,7 +98,22 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn declarations(&mut self) -> bool {
-        false
+    fn toplevel_decl(&mut self) -> bool {
+        self.skip_trivia();
+
+        match self.current() {
+            Some(Model) | Some(Package) => self.package_list(),
+            Some(_) => self.package_body(),
+            None => return false,
+        }
+        true
+    }
+
+    fn package_list(&mut self) {
+        self.next() // TODO
+    }
+
+    fn package_body(&mut self) {
+        self.next() // TODO
     }
 }
