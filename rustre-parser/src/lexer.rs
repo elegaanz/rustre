@@ -47,7 +47,7 @@ pub enum Token {
     Colon,
 
     #[token(",")]
-    Coma,
+    Comma,
 
     #[token("const")]
     Const,
@@ -268,6 +268,8 @@ pub enum Token {
     PackageBody,
     ConstantDecl,
     TypeDecl,
+    EquationNode,
+    ExpressionNode,
     ExternalNodeDecl,
     NodeDecl,
     NodeAlias,
@@ -277,6 +279,10 @@ pub enum Token {
     /// Children: ModelDecl, PackageDecl, PackageAlias
     PackageList,
     ParamDecl,
+    ParamsDecl,
+    ReturnsNode,
+    TypeNode,
+    VarDecl,
 }
 
 impl From<Token> for rowan::SyntaxKind {
