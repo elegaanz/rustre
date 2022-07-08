@@ -46,11 +46,8 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_trivia(&mut self) {
-        loop {
-            match self.current() {
-                Some(Comment) | Some(InlineComment) | Some(Space) => self.next(),
-                _ => break,
-            }
+        while let Some(Comment) | Some(InlineComment) | Some(Space) = self.current() {
+            self.next();
         }
     }
 
@@ -76,15 +73,11 @@ impl<'a> Parser<'a> {
         self.start(Error);
         let start = self.start_pos();
 
-        loop {
-            if let Some(curr) = self.current() {
-                if stop.contains(&curr) {
-                    break;
-                }
-                self.next();
-            } else {
+        while let Some(curr) = self.current() {
+            if stop.contains(&curr) {
                 break;
             }
+            self.next();
         }
 
         self.errors.push(super::Error {
@@ -94,7 +87,7 @@ impl<'a> Parser<'a> {
         self.end();
     }
 
-    fn peek<const N: usize>(&self) -> [Token; N] {
+    fn peek<const N: usize>(&self) -> Option<[Token; N]> {
         let start = self.tokens.len() - 1 - N;
         self.tokens
             .iter()
@@ -102,12 +95,12 @@ impl<'a> Parser<'a> {
             .skip(start)
             .collect::<Vec<_>>()[..]
             .try_into()
-            .unwrap()
+            .ok()
     }
 
     /// Report an error if the current token is not the expected one,
     /// moves to the next token if it matched
-    fn expect(&mut self, expected: Token) {
+    fn expect(&mut self, expected: Token) -> bool {
         self.skip_trivia();
         let current = self.current();
         if current != Some(expected) {
@@ -115,18 +108,23 @@ impl<'a> Parser<'a> {
                 "Unexpected token: {:?} (expected {:?})",
                 current, expected
             ));
+            false
         } else {
-            self.next()
+            self.next();
+            true
         }
     }
 
     /// Advance only if the next token is the given one
     ///
     /// Allows for optionally matching a token
-    fn accept(&mut self, tok: Token) {
+    fn accept(&mut self, tok: Token) -> bool {
         self.skip_trivia();
         if self.current() == Some(tok) {
             self.next();
+            true
+        } else {
+            false
         }
     }
 
@@ -139,10 +137,44 @@ impl<'a> Parser<'a> {
     }
 }
 
-static NEW_DECL: &'static [Token] = &[Const, Type, Node, Unsafe, Extern, Function, End];
+static NEW_DECL: &[Token] = &[Const, Type, Node, Unsafe, Extern, Function, End];
 
 /// Actual parsing rules
 impl<'a> Parser<'a> {
+    fn equation(&mut self) -> bool {
+        let equation = self.builder.checkpoint();
+
+        if self.accept(Assert) || (self.accept_left() && self.accept(Equal)) {
+            self.builder.start_node_at(equation, EquationNode.into());
+        } else {
+            return false;
+        }
+
+        self.expression();
+        self.expect(Semicolon);
+
+        self.end();
+        true
+    }
+
+    fn equation_list(&mut self) {
+        if !self.equation() {
+            self.error_until(
+                "Expected at least one expression in the node's body",
+                &[Tel],
+            );
+        }
+
+        while self.equation() {}
+    }
+
+    fn expression(&mut self) {
+        self.start(ExpressionNode);
+        // FIXME: an expression is usually more complex than an int constant
+        self.expect(IConst);
+        self.end();
+    }
+
     pub fn file(&mut self) {
         self.start(Root);
 
@@ -150,6 +182,12 @@ impl<'a> Parser<'a> {
         while self.toplevel_decl() {}
 
         self.end();
+    }
+
+    fn id_ref(&mut self) {
+        // TODO that's not how it works
+        //   c.f.: https://www-verimag.imag.fr/DIST-TOOLS/SYNCHRONE/lustre-v6/doc/lv6-ref-man.pdf#Lv6IdRef
+        self.expect(Ident);
     }
 
     /// Returns true while it can parse
@@ -172,6 +210,11 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn accept_lv6_id(&mut self) -> bool {
+        // FIXME
+        self.accept(Ident)
+    }
+
     fn toplevel_decl(&mut self) -> bool {
         self.skip_trivia();
 
@@ -192,7 +235,7 @@ impl<'a> Parser<'a> {
                     self.model_decl();
                 }
                 Some(Package) => {
-                    if self.peek() == [Equal] || self.peek() == [Is] {
+                    if self.peek() == Some([Equal]) || self.peek() == Some([Is]) {
                         self.package_eq();
                     } else {
                         self.package_decl();
@@ -248,9 +291,9 @@ impl<'a> Parser<'a> {
         self.error("TODO: package declaration")
     }
 
-    fn ident(&mut self) {
+    fn ident(&mut self) -> bool {
         // TODO: qualified idents
-        self.expect(Ident);
+        self.expect(Ident)
     }
 
     fn uses(&mut self) {
@@ -270,6 +313,11 @@ impl<'a> Parser<'a> {
         false
     }
 
+    fn accept_left(&mut self) -> bool {
+        // FIXME
+        self.accept(Ident)
+    }
+
     fn node_decl(&mut self) {
         self.start(NodeDecl);
         self.accept(Unsafe);
@@ -285,8 +333,8 @@ impl<'a> Parser<'a> {
         }
         self.skip_trivia();
         if self.current() == Some(OpenPar) {
-            self.param_decl();
-            self.returns();
+            self.params();
+            self.accept_returns();
         }
 
         self.skip_trivia();
@@ -305,14 +353,63 @@ impl<'a> Parser<'a> {
                 self.effective_node();
                 self.accept(Semicolon); // TODO: isn't it mandatory?
             }
+            // node definition
+            Some(Let) => {
+                self.node_body();
+            }
             _ => self.error_until("Expected a semicolon or a node alias", NEW_DECL),
         }
 
         self.end();
     }
 
+    fn expect_type(&mut self) -> bool {
+        self.skip_trivia();
+
+        // TODO: maybe don't start a node before being sure it can be parsed
+        self.start(TypeNode);
+
+        match self.current() {
+            Some(Bool) => self.next(),
+            Some(Int) => self.next(),
+            Some(Real) => self.next(),
+            Some(Ident) => self.id_ref(), // FIXME: pattern is wrong, it should match any "IdRef"
+            _ => {
+                self.error_until("Not a type", &[Colon, Semicolon, Hat]);
+                self.end();
+                return false;
+            }
+        }
+
+        if self.accept(Hat) {
+            self.expression();
+        }
+
+        self.end();
+
+        true
+    }
+
     fn type_decls(&mut self) {
         self.next()
+    }
+
+    fn accept_typed_lv6_ids(&mut self) -> bool {
+        if !self.accept_lv6_id() {
+            return false;
+        }
+
+        while self.accept(Comma) {
+            self.expect(Ident);
+        }
+
+        if self.accept(Colon) {
+            self.expect_type();
+        } else {
+            self.error_until("Missing type", &[Semicolon, ClosePar]);
+        }
+
+        true
     }
 
     /// Static parameters declaration, with surrrounding "static parenthesis" (<< and >>).
@@ -325,18 +422,40 @@ impl<'a> Parser<'a> {
         self.expect(CloseStaticPar);
     }
 
-    fn param_decl(&mut self) {
-        self.start(ParamDecl);
+    fn params(&mut self) {
+        self.start(ParamsDecl);
         self.expect(OpenPar);
-        self.error("TODO: param decl");
+        self.var_decl_list();
+        self.expect(ClosePar);
         self.end();
     }
 
     fn node_body(&mut self) {
         self.expect(Let);
-        self.error("TODO: node body");
+        self.equation_list();
         self.expect(Tel);
         self.accept(Semicolon);
+    }
+
+    fn accept_var_decl(&mut self) -> bool {
+        self.start(VarDecl);
+        let success = self.accept_typed_lv6_ids();
+        // FIXME: also handle clock/when expressions
+        self.end();
+        success
+    }
+
+    fn var_decl_list(&mut self) {
+        if !self.accept_var_decl() {
+            self.error_until("Expected at least one declaration", &[ClosePar]);
+            return;
+        }
+
+        self.skip_trivia();
+        while let Some([Semicolon, Ident]) = self.peek() {
+            self.expect(Semicolon);
+            self.accept_var_decl();
+        }
     }
 
     fn var_decls(&mut self) -> bool {
@@ -344,8 +463,15 @@ impl<'a> Parser<'a> {
         false
     }
 
-    fn returns(&mut self) {
-        self.error("TODO: returns")
+    fn accept_returns(&mut self) {
+        self.skip_trivia();
+        if self.current() == Some(Returns) {
+            self.start(ReturnsNode);
+            self.next();
+            self.params();
+            self.accept(Semicolon);
+            self.end();
+        }
     }
 
     fn effective_node(&mut self) {
