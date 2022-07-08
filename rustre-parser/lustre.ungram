@@ -1,0 +1,24 @@
+// This file should not be read as a grammar, but rather as "what properties/children
+// a given node can have?"
+
+// For instance, in the actual grammar, it is mandatory that either PackageBody or
+// PackageList are present, but we want to consider them as optional properties
+// to generate two getters that return an Option<_>
+Root = IncludeStatement* PackageBody? PackageList?
+
+IncludeStatement = 'include' 'str'
+
+PackageList = ModelDecl* PackageDecl* PackageAlias*
+ModelDecl = 'model' // TODO
+PackageDecl = 'package' // TODO
+PackageAlias = 'package' // TODO
+
+PackageBody = OneDecl*
+
+OneDecl = ConstantDecl | TypeDecl | NodeDecl
+
+NodeDecl = 'extern'? 'unsafe'? 'node'? 'function'? // TODO
+
+ConstantDecl = 'const' // TODO
+
+TypeDecl = 'type'
