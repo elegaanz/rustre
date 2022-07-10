@@ -4,11 +4,14 @@ use ariadne::{Label, Report, ReportKind, Span};
 use rowan::NodeOrToken;
 use rustre_parser::{lexer::Token, Parse, SyntaxNode, SyntaxToken};
 
-fn main() {
+fn main() -> Result<(), u8> {
     let file = std::env::args().nth(1).expect("please give a file name");
     let contents = std::fs::read_to_string(&file).unwrap();
     let Parse { root, errors } = rustre_parser::Parse::parse(&contents);
     print(0, root.into());
+
+    let no_errors = errors.is_empty();
+
     for err in errors {
         Report::<(String, Range<usize>)>::build(ReportKind::Error, file.clone(), err.span.start())
             .with_message(err.msg)
@@ -16,6 +19,12 @@ fn main() {
             .finish()
             .print(ariadne::sources(vec![(file.clone(), &contents)]))
             .unwrap();
+    }
+
+    if no_errors {
+        Ok(())
+    } else {
+        Err(1)
     }
 }
 
