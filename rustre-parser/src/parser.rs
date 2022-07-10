@@ -302,7 +302,7 @@ impl<'a> Parser<'a> {
         self.ident();
         self.uses();
         self.expect(Needs);
-        self.static_params_decl();
+        self.accept_static_params();
         self.provides();
         self.expect(Body);
         self.package_body();
@@ -325,10 +325,6 @@ impl<'a> Parser<'a> {
 
     fn uses(&mut self) {
         self.error("TODO: uses")
-    }
-
-    fn static_params_decl(&mut self) {
-        self.error("TODO: static params decl")
     }
 
     fn provides(&mut self) {
@@ -355,9 +351,7 @@ impl<'a> Parser<'a> {
         self.next();
         self.ident();
         self.skip_trivia();
-        if self.current() == Some(OpenStaticPar) {
-            self.paren_static_param_decl();
-        }
+        self.accept_static_params();
         self.skip_trivia();
         if self.current() == Some(OpenPar) {
             self.params();
@@ -377,8 +371,9 @@ impl<'a> Parser<'a> {
             }
             // alias node
             Some(Equal) => {
+                self.next();
                 self.effective_node();
-                self.accept(Semicolon); // TODO: isn't it mandatory?
+                self.accept(Semicolon);
             }
             // node definition
             Some(Let) => {
@@ -439,16 +434,6 @@ impl<'a> Parser<'a> {
         true
     }
 
-    /// Static parameters declaration, with surrrounding "static parenthesis" (<< and >>).
-    ///
-    /// Self::static_param_decl only parses the inner list of paramater, because it is useful
-    /// in other places, where there are no << >>
-    fn paren_static_param_decl(&mut self) {
-        self.expect(OpenStaticPar);
-        self.static_params_decl();
-        self.expect(CloseStaticPar);
-    }
-
     fn params(&mut self) {
         self.start(ParamsDecl);
         self.expect(OpenPar);
@@ -501,7 +486,137 @@ impl<'a> Parser<'a> {
         }
     }
 
+    // Ebnf group StaticRules
+
+    fn accept_static_params(&mut self) -> bool {
+        if self.current() == Some(OpenStaticPar) {
+            self.start(StaticParamsNode);
+
+            while {
+                self.skip_trivia();
+                self.current() != Some(CloseStaticPar)
+            } {
+                self.next();
+                if let Err(msg) = self.static_param() {
+                    self.error(msg);
+                }
+            }
+
+            self.next();
+            self.end();
+            true
+        } else {
+            false
+        }
+    }
+
+    fn static_param(&mut self) -> Result<(), &'static str> {
+        fn function_or_node_end(s: &mut Parser) {
+            s.accept_lv6_id();
+            s.params();
+            s.expect(Returns);
+            s.params();
+        }
+
+        self.skip_trivia();
+        match self.current() {
+            Some(Type) => {
+                self.next();
+                self.accept_lv6_id();
+                Ok(())
+            }
+            Some(Const) => {
+                self.next();
+                self.accept_lv6_id();
+                if self.accept(Colon) {
+                    self.expect_type();
+                } else {
+                    self.error("Expected colon and type");
+                }
+                Ok(())
+            }
+            Some(Node) | Some(Function) => {
+                function_or_node_end(self);
+                Ok(())
+            }
+            Some(Unsafe) => {
+                self.next();
+                self.skip_trivia();
+                if let Some(Node) | Some(Function) = self.current() {
+                    function_or_node_end(self);
+                } else {
+                    self.error("Expected `node` or `function` after `unsafe`")
+                }
+
+                Ok(())
+            }
+            _ => Err(
+                "Expected `type`, `const`, `node`, `function`, `unsafe node` or `unsafe function`",
+            ),
+        }
+    }
+
     fn effective_node(&mut self) {
-        self.error("TODO: effective node")
+        self.id_ref();
+        self.static_arg_list();
+    }
+
+    fn static_arg_list(&mut self) {
+        if self.current() == Some(OpenStaticPar) {
+            self.start(StaticArgsNode);
+
+            while {
+                self.skip_trivia();
+                self.current() != Some(CloseStaticPar)
+            } {
+                self.next();
+                if let Err(msg) = self.static_arg() {
+                    self.error(msg);
+                }
+            }
+
+            self.next(); // >>
+            self.end();
+        }
+    }
+
+    fn static_arg(&mut self) -> Result<(), &'static str> {
+        self.skip_trivia();
+        match self.current() {
+            Some(Type) => {
+                self.start(StaticArgNode);
+                self.next();
+                self.expect_type();
+                self.end();
+                Ok(())
+            }
+            Some(Const) => {
+                self.start(StaticArgNode);
+                self.next();
+                self.expression();
+                self.end();
+                Ok(())
+            }
+            Some(Node) | Some(Function) => {
+                self.start(StaticArgNode);
+                self.next();
+                self.effective_node();
+                self.end();
+                Ok(())
+            }
+            // TODO PredefOp
+            Some(IConst) => {
+                // FIXME: SimpleExp (or simply expression and we check at a later stage)
+                self.start(StaticArgNode);
+                self.start(ExpressionNode);
+                self.next();
+                self.end();
+                self.end();
+                Ok(())
+            }
+            // TODO SurelyType
+            // TODO SurelyNode
+            _ => Err("Expected `type`, `const`, `node`, `function` or TODO"),
+        }
     }
 }

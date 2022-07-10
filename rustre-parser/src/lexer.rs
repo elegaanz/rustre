@@ -281,6 +281,9 @@ pub enum Token {
     ParamDecl,
     ParamsDecl,
     ReturnsNode,
+    StaticArgsNode,
+    StaticArgNode,
+    StaticParamsNode,
     TypeNode,
     VarDecl,
 }
