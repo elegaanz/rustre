@@ -169,9 +169,36 @@ impl<'a> Parser<'a> {
     }
 
     fn expression(&mut self) {
+        // FIXME: this is an extremely stupid and lax implementation
+        const TOKENS: &[Token] = &[
+            True, False, IConst, RConst, Ident, Not, Minus, Pre, Current, Int, Real, When, FBy,
+            Arrow, And, Or, Xor, Impl, Neq, Equal, Lt, Lte, Gt, Gte, Div, Mod, Plus, Slash, Star,
+            If, Then, Else, With, Nor, Sharp, Nor, Hat, Bar, Dot, Merge, CDots,
+        ];
+
         self.start(ExpressionNode);
-        // FIXME: an expression is usually more complex than an int constant
-        self.expect(IConst);
+        while {
+            self.skip_trivia();
+            match self.current() {
+                Some(d @ OpenPar | d @ OpenBracket) => {
+                    self.start(ExpressionNode);
+                    self.next();
+                    self.expression();
+                    match d {
+                        OpenPar => self.expect(ClosePar),
+                        OpenBracket => self.expect(CloseBracket),
+                        _ => unreachable!(),
+                    };
+                    self.end();
+                    true
+                }
+                token if TOKENS.contains(&token.unwrap_or(Semicolon)) => {
+                    self.next();
+                    true
+                }
+                _ => false,
+            }
+        } {}
         self.end();
     }
 
