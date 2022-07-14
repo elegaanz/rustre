@@ -308,6 +308,16 @@ impl rowan::Language for LustreLang {
     }
 }
 
+impl crate::rowan_nom::RowanNomLanguage for LustreLang {
+    fn is_trivia(kind: Self::Kind) -> bool {
+        matches!(kind, Token::Comment | Token::InlineComment | Token::Space)
+    }
+
+    fn get_error_kind() -> Self::Kind {
+        Token::Error
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

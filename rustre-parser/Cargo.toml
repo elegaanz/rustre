@@ -8,6 +8,7 @@ repository = "https://github.com/elegaanz/rustre"
 
 [dependencies]
 logos = "0.12.1"
+nom = "7.1.1"
 rowan = "0.15.5"
 
 [build-dependencies]

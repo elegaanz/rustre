@@ -1,36 +1,34 @@
+use crate::rowan_nom::*;
 use rowan::GreenNodeBuilder;
 
 use crate::{
     lexer::Token::{self, *},
-    Parse, SyntaxNode,
+    Parse,
 };
 
+type Input<'slice, 'src> = crate::rowan_nom::Input<'slice, 'src, crate::LustreLang>;
+type IResult<'slice, 'src, E = super::Error> =
+    crate::rowan_nom::IResult<'slice, 'src, crate::LustreLang, super::Error, E>;
+type RootIResult<'slice, 'src, E = super::Error> =
+    crate::rowan_nom::RootIResult<'slice, 'src, crate::LustreLang, super::Error, E>;
+
+// TODO remove when nom has replaced everything
 pub struct Parser<'a> {
     /// Stack of remaining tokens
     ///
     /// The first token is at the end of the Vec (top of the stack)
-    tokens: Vec<(Token, &'a str)>,
-    builder: GreenNodeBuilder<'static>,
-    errors: Vec<super::Error>,
-    pos: usize,
+    pub(crate) tokens: Vec<(Token, &'a str)>,
+    pub(crate) builder: GreenNodeBuilder<'static>,
+    pub(crate) errors: Vec<super::Error>,
+    pub(crate) pos: usize,
 }
 
 /// Utils
 impl<'a> Parser<'a> {
     pub fn parse(tokens: Vec<(Token, &'a str)>) -> Parse {
-        let mut parser = Parser {
-            tokens,
-            errors: Vec::new(),
-            builder: GreenNodeBuilder::new(),
-            pos: 0,
-        };
-
-        parser.file();
-
-        Parse {
-            root: SyntaxNode::new_root(parser.builder.finish()),
-            errors: parser.errors,
-        }
+        let input = Input::from(tokens.as_slice());
+        let (_, (root, errors)) = parse_program(input).expect("TODO");
+        Parse { root, errors }
     }
 
     fn start(&mut self, tok: Token) {
@@ -46,7 +44,11 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_trivia(&mut self) {
-        while let Some(Comment) | Some(InlineComment) | Some(Space) = self.current() {
+        while self
+            .current()
+            .map(crate::LustreLang::is_trivia)
+            .unwrap_or(false)
+        {
             self.next();
         }
     }
@@ -139,6 +141,56 @@ impl<'a> Parser<'a> {
 
 static NEW_DECL: &[Token] = &[Const, Type, Node, Unsafe, Extern, Function, End];
 
+// Ebnf group ProgramRules
+
+pub fn parse_program<'slice, 'src>(input: Input<'slice, 'src>) -> RootIResult<'slice, 'src> {
+    root_node(
+        Root,
+        join((
+            many0(parse_include),
+            many0(adapter::old_style(Parser::toplevel_decl)),
+        )),
+    )(input)
+}
+
+pub fn parse_include<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(IncludeStatement, join((t(Include), fallible(t(Str)))))(input)
+}
+
+// Ebnf group PackageRules
+
+// Ebnf group ModelRules
+
+// Ebnf group IdentVIRules
+
+// Ebnf group IdentRules
+
+// Ebnf group NodesRules
+
+// Ebnf group ConstantDeclRules
+
+// Ebnf group TypeDeclRules
+
+// Ebnf group SimpleTypeRules
+
+// Ebnf group ExtNodesRules
+
+// Ebnf group StaticRules
+
+// Ebnf group BodyRules
+
+// Ebnf group LeftRules
+
+// Ebnf group ExpressionRules
+
+// Ebnf group MergeRules
+
+// Ebnf group PredefRules
+
+// Ebnf group ExpressionByNamesRules
+
+// Ebnf group ConstantRules
+
 /// Actual parsing rules
 impl<'a> Parser<'a> {
     fn equation(&mut self) -> bool {
@@ -202,39 +254,10 @@ impl<'a> Parser<'a> {
         self.end();
     }
 
-    pub fn file(&mut self) {
-        self.start(Root);
-
-        while self.include_statement() {}
-        while self.toplevel_decl() {}
-
-        self.end();
-    }
-
     fn id_ref(&mut self) {
         // TODO that's not how it works
         //   c.f.: https://www-verimag.imag.fr/DIST-TOOLS/SYNCHRONE/lustre-v6/doc/lv6-ref-man.pdf#Lv6IdRef
         self.expect(Ident);
-    }
-
-    /// Returns true while it can parse
-    fn include_statement(&mut self) -> bool {
-        self.skip_trivia();
-        match self.current() {
-            Some(Include) => {
-                self.start(IncludeStatement);
-                self.next();
-                self.skip_trivia();
-                match self.current() {
-                    Some(Str) => self.next(),
-                    Some(_) => self.error("Unexpected token: expected a string literal"),
-                    None => self.error("Unexpected end of file"),
-                }
-                self.end();
-                true
-            }
-            _ => false,
-        }
     }
 
     fn accept_lv6_id(&mut self) -> bool {
