@@ -1,6 +1,7 @@
 use nom::combinator::map;
 use nom::Parser;
 use rowan::{GreenNode, GreenToken, NodeOrToken, SyntaxKind, SyntaxNode};
+use std::marker::PhantomData;
 
 pub trait RowanNomLanguage: rowan::Language {
     /// Returns `true` if the token is a trivia token (whitespace or comment)
@@ -106,35 +107,40 @@ impl<'slice, 'src, Lang: Language> nom::InputLength for Input<'slice, 'src, Lang
     }
 }
 
-/// TODO <Language> should be a phantom type parameter here
-pub struct Children<E> {
+pub struct Children<Lang: Language, E> {
     errors: Vec<E>,
     inner: Vec<NodeOrToken<GreenNode, GreenToken>>,
+    _lang: PhantomData<Lang>,
 }
 
-impl<E> Children<E> {
-    fn empty() -> Self {
+impl<Lang: Language, E> Default for Children<Lang, E> {
+    fn default() -> Self {
         Self {
             errors: vec![],
             inner: vec![],
+            _lang: PhantomData,
         }
     }
+}
 
-    fn from_tokens<'src, Lang: Language, I: IntoIterator<Item = (Lang::Kind, &'src str)>>(
-        iter: I,
-    ) -> Self {
+impl<Lang: Language, E> Children<Lang, E> {
+    fn empty() -> Self {
+        Self::default()
+    }
+
+    fn from_tokens<'src, I: IntoIterator<Item = (Lang::Kind, &'src str)>>(iter: I) -> Self {
         Self {
-            errors: vec![],
             inner: iter
                 .into_iter()
                 .map(|(token, str)| {
                     NodeOrToken::Token(GreenToken::new(Lang::kind_to_raw(token), str))
                 })
                 .collect(),
+            ..Self::default()
         }
     }
 
-    fn from_err<Lang: Language>(error: E) -> Self {
+    fn from_err(error: E) -> Self {
         Self {
             errors: vec![error],
             // TODO include inner non-matched nodes/tokens ?
@@ -142,6 +148,7 @@ impl<E> Children<E> {
                 Lang::kind_to_raw(Lang::get_error_kind()),
                 [],
             ))],
+            ..Self::default()
         }
     }
 
@@ -154,6 +161,7 @@ impl<E> Children<E> {
                     NodeOrToken::Node(n) => NodeOrToken::Node(n.to_owned()),
                 })
                 .collect(),
+            ..Self::default()
         }
     }
 
@@ -162,10 +170,14 @@ impl<E> Children<E> {
         self.inner.extend(other.inner);
     }
 
-    fn into_node(self, kind: SyntaxKind) -> Self {
+    fn into_node(self, kind: Lang::Kind) -> Self {
         Self {
             errors: self.errors,
-            inner: vec![NodeOrToken::Node(GreenNode::new(kind, self.inner))],
+            inner: vec![NodeOrToken::Node(GreenNode::new(
+                Lang::kind_to_raw(kind),
+                self.inner,
+            ))],
+            ..Self::default()
         }
     }
 }
@@ -177,7 +189,7 @@ pub trait RowanNomError {
 }
 
 pub type IResult<'slice, 'src, Lang, E, IE = E> =
-    nom::IResult<Input<'slice, 'src, Lang>, Children<E>, IE>;
+    nom::IResult<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>;
 pub type RootIResult<'slice, 'src, Lang, E, IE = E> =
     nom::IResult<Input<'slice, 'src, Lang>, (SyntaxNode<Lang>, Vec<E>), IE>;
 
@@ -190,7 +202,7 @@ pub fn t<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError>(
                 let trivia = input.trivia_tokens;
                 Ok((
                     input.next(),
-                    Children::from_tokens::<Lang, _>(
+                    Children::from_tokens(
                         trivia
                             .iter()
                             .cloned()
@@ -207,7 +219,7 @@ pub fn t<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError>(
 }
 
 pub fn fallible_with<'slice, 'src: 'slice, Lang: Language, E, IE>(
-    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<E>, IE>,
+    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
     mut convert: impl FnMut(IE) -> E,
 ) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
 where
@@ -216,14 +228,14 @@ where
     move |input| {
         let conv = &mut convert;
         parser.parse(input.clone()).or_else(move |e| match e {
-            nom::Err::Error(e) => Ok((input, Children::from_err::<Lang>(conv(e)))),
+            nom::Err::Error(e) => Ok((input, Children::from_err(conv(e)))),
             other => Err(other),
         })
     }
 }
 
 pub fn fallible<'slice, 'src: 'slice, Lang: Language, E, IE>(
-    parser: impl Parser<Input<'slice, 'src, Lang>, Children<E>, IE>,
+    parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
 ) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
 where
     Lang::Kind: 'static,
@@ -235,19 +247,18 @@ where
 /// Wraps the contained parser's direct and indirect output into a node
 pub fn node<'slice, 'src: 'slice, Lang: Language, E, IE>(
     node: Lang::Kind,
-    parser: impl Parser<Input<'slice, 'src, Lang>, Children<E>, IE>,
+    parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
 ) -> impl FnOnce(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
 where
     Lang::Kind: 'static,
 {
-    let syntax = Lang::kind_to_raw(node);
-    move |input| map(parser, |c| c.into_node(syntax))(input)
+    move |input| map(parser, |c| c.into_node(node))(input)
 }
 
 /// Wraps the contained parser's output into a root node inside a [SyntaxNode]
 pub fn root_node<'slice, 'src: 'slice, Lang: Language, E, IE>(
     node: Lang::Kind,
-    parser: impl Parser<Input<'slice, 'src, Lang>, Children<E>, IE>,
+    parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
 ) -> impl FnOnce(Input<'slice, 'src, Lang>) -> RootIResult<'slice, 'src, Lang, E, IE>
 where
     Lang::Kind: 'static,
@@ -273,8 +284,8 @@ macro_rules! impl_tuple {
         impl<'slice, 'src: 'slice, Lang: Language, CE, IE, $arg0, $($arg),*> Joignable<'slice, 'src, Lang, CE, IE> for ($arg0, $($arg,)*)
         where
             Lang::Kind: 'static,
-            $arg0: Parser<Input<'slice, 'src, Lang>, Children<CE>, IE>,
-            $($arg: Parser<Input<'slice, 'src, Lang>, Children<CE>, IE>),*
+            $arg0: Parser<Input<'slice, 'src, Lang>, Children<Lang, CE>, IE>,
+            $($arg: Parser<Input<'slice, 'src, Lang>, Children<Lang, CE>, IE>),*
         {
             fn parse(&mut self, input: Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, CE, IE> {
                 #[allow(non_snake_case)]
@@ -314,7 +325,7 @@ pub fn join<'slice, 'src: 'slice, Lang: Language, E, IE>(
 /// Repeats the given parser 0 or more times until it fails, and join all the results in a
 /// `Children` object
 pub fn many0<'slice, 'src: 'slice, E, Lang: Language, IE>(
-    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<E>, E>,
+    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, E>,
 ) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
 where
     Lang::Kind: 'static,
