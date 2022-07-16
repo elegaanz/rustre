@@ -17,11 +17,25 @@ pub struct Error {
     pub msg: String,
 }
 
-impl RowanNomError for Error {
+impl RowanNomError<LustreLang> for Error {
     fn from_message(message: &str) -> Self {
         Error {
             span: 0..0,
             msg: message.to_string(),
+        }
+    }
+
+    fn from_unexpected_eof(position: usize) -> Self {
+        Error {
+            span: position..position,
+            msg: "unexpected eof".to_string(),
+        }
+    }
+
+    fn from_unexpected_token(span: Range<usize>, expected: Token, found: Token) -> Self {
+        Error {
+            span,
+            msg: format!("expected {expected:?}, found {found:?}"),
         }
     }
 }

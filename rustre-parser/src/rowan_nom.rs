@@ -1,3 +1,6 @@
+mod error;
+
+pub use error::*;
 use nom::combinator::map;
 use nom::Parser;
 use rowan::{GreenNode, GreenToken, NodeOrToken, SyntaxKind, SyntaxNode};
@@ -44,6 +47,24 @@ impl<'slice, 'src, Lang: Language> Input<'slice, 'src, Lang> {
                 tokens: rest,
             }
             .advance_trivia(),
+        }
+    }
+
+    fn next_trivia(self) -> Option<(Self, &'slice RichToken<'src, Lang>)> {
+        if let [token, rest @ ..] = self.trivia_tokens {
+            let token_len = token.1.len();
+
+            Some((
+                Input {
+                    src_pos: self.src_pos + token_len,
+                    trivia_tokens: rest,
+                    trivia_tokens_text_len: self.trivia_tokens_text_len - token_len,
+                    tokens: self.tokens,
+                },
+                token,
+            ))
+        } else {
+            None
         }
     }
 
@@ -182,20 +203,22 @@ impl<Lang: Language, E> Children<Lang, E> {
     }
 }
 
-pub trait RowanNomError {
-    fn from_message(message: &str) -> Self;
-    // TODO add much more errors (i.e. from_eof(positon: usize))
-    // TODO include location information in constructors
-}
-
 pub type IResult<'slice, 'src, Lang, E, IE = E> =
     nom::IResult<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>;
 pub type RootIResult<'slice, 'src, Lang, E, IE = E> =
     nom::IResult<Input<'slice, 'src, Lang>, (SyntaxNode<Lang>, Vec<E>), IE>;
 
-pub fn t<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError>(
+/// Parses only the given token, fails if the wrong token is read or if the input is empty
+///
+/// Trivia tokens are automatically skipped and prepended to the parsed token
+pub fn t<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
     token: Lang::Kind,
 ) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE> {
+    debug_assert!(
+        !Lang::is_trivia(token),
+        "this parser will always fail with trivia tokens, please use `t_raw`"
+    );
+
     move |input| {
         if let Some((current_token, current_token_str)) = input.tokens.first() {
             if *current_token == token {
@@ -213,7 +236,39 @@ pub fn t<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError>(
                 Err(nom::Err::Error(IE::from_message("unexpected token")))
             }
         } else {
-            Err(nom::Err::Error(IE::from_message("unexpected eof")))
+            Err(nom::Err::Error(IE::from_unexpected_eof(input.src_pos)))
+        }
+    }
+}
+
+/// Parses only the given token, fails if the wrong token is read or if the input is empty, **but
+/// does not skip trivia tokens**
+///
+/// This may be useful in situations were whitespace or comments are prohibited in a specific
+/// context
+pub fn t_raw<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
+    token: Lang::Kind,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE> {
+    let is_trivia = Lang::is_trivia(token);
+
+    move |input| {
+        let input_src_pos = input.src_pos;
+
+        if is_trivia {
+            if let Some((new_input, current_token)) = input.next_trivia() {
+                if current_token.0 == token {
+                    Ok((
+                        new_input,
+                        Children::from_tokens(std::iter::once(*current_token)),
+                    ))
+                } else {
+                    Err(nom::Err::Error(IE::from_message("unexpected token")))
+                }
+            } else {
+                Err(nom::Err::Error(IE::from_unexpected_eof(input_src_pos)))
+            }
+        } else {
+            t(token)(input)
         }
     }
 }
@@ -353,7 +408,7 @@ pub mod adapter {
 
     const DUMMY_SYNTAX: SyntaxKind = SyntaxKind(65535);
 
-    pub fn old_style<'slice, 'src: 'slice, IE: RowanNomError>(
+    pub fn old_style<'slice, 'src: 'slice, IE: RowanNomError<crate::LustreLang>>(
         f: impl Fn(&mut Parser<'src>) -> bool,
     ) -> impl FnMut(
         Input<'slice, 'src, crate::LustreLang>,
