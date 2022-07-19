@@ -258,6 +258,14 @@ pub enum Token {
     Error,
 
     // Composite nodes
+    IdNode,
+    NodeNode,
+    PragmaNode,
+    ParamsNode,
+    BodyNode,
+    AssertEquationNode,
+    EqualsEquationNode,
+
     /// Children: IncludeStatement + PackageList or PackageBody
     Root,
     /// Children: Include + String
@@ -268,7 +276,6 @@ pub enum Token {
     PackageBody,
     ConstantDecl,
     TypeDecl,
-    EquationNode,
     ExpressionNode,
     ExternalNodeDecl,
     NodeDecl,

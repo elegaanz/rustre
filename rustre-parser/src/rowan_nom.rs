@@ -289,6 +289,16 @@ where
     }
 }
 
+pub fn expect<'slice, 'src: 'slice, Lang: Language, E: RowanNomError<Lang>>(
+    parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, E>,
+    message: &'static str,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, E>
+where
+    Lang::Kind: 'static,
+{
+    fallible_with(parser, move |e| e.with_context(message))
+}
+
 pub fn fallible<'slice, 'src: 'slice, Lang: Language, E, IE>(
     parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
 ) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
@@ -377,9 +387,66 @@ pub fn join<'slice, 'src: 'slice, Lang: Language, E, IE>(
     move |input| parsers.parse(input)
 }
 
+pub fn opt<'slice, 'src: 'slice, Lang: Language, E, IE>(
+    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
+where
+    Lang::Kind: 'static,
+{
+    move |input| match parser.parse(input.clone()) {
+        Ok(ok) => Ok(ok),
+        Err(nom::Err::Error(_)) => Ok((input, Children::empty())),
+        Err(e) => Err(e),
+    }
+}
+
+pub trait Alt<'slice, 'src, Lang: Language, E, IE> {
+    fn parse(&mut self, input: Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>;
+}
+
+macro_rules! impl_alt {
+    ($arg0:ident, $($arg:ident),*) => {
+        #[allow(unused_parens)]
+        impl<'slice, 'src: 'slice, Lang: Language, CE, IE, $arg0, $($arg),*> Alt<'slice, 'src, Lang, CE, IE> for ($arg0, $($arg,)*)
+        where
+            Lang::Kind: 'static,
+            $arg0: Parser<Input<'slice, 'src, Lang>, Children<Lang, CE>, IE>,
+            $($arg: Parser<Input<'slice, 'src, Lang>, Children<Lang, CE>, IE>),*
+        {
+            fn parse(&mut self, input: Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, CE, IE> {
+                #[allow(non_snake_case)]
+                let ($arg0, $($arg),*) = self;
+
+                $arg0.parse(input.clone())
+                $(.or_else(|_| $arg.parse(input.clone())))*
+            }
+        }
+    };
+}
+
+impl_alt!(A,);
+impl_alt!(A, B);
+impl_alt!(A, B, C);
+impl_alt!(A, B, C, D);
+impl_alt!(A, B, C, D, E);
+impl_alt!(A, B, C, D, E, F);
+impl_alt!(A, B, C, D, E, F, G);
+impl_alt!(A, B, C, D, E, F, G, H);
+impl_alt!(A, B, C, D, E, F, G, H, I);
+impl_alt!(A, B, C, D, E, F, G, H, I, J);
+impl_alt!(A, B, C, D, E, F, G, H, I, J, K);
+impl_alt!(A, B, C, D, E, F, G, H, I, J, K, L);
+impl_alt!(A, B, C, D, E, F, G, H, I, J, K, L, M);
+
+pub fn alt<'slice, 'src: 'slice, Lang: Language, E, IE>(
+    mut parsers: impl Alt<'slice, 'src, Lang, E, IE>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE> {
+    move |input| parsers.parse(input)
+}
+
 /// Repeats the given parser 0 or more times until it fails, and join all the results in a
 /// `Children` object
-pub fn many0<'slice, 'src: 'slice, E, Lang: Language, IE>(
+pub fn many0<'slice, 'src: 'slice, Lang: Language, E, IE>(
     mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, E>,
 ) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
 where
@@ -397,6 +464,45 @@ where
         }
 
         Ok((input, first))
+    }
+}
+
+/// While the `end` parser doesn't succeed, run the first parser 0 or more times and join all the
+/// results in a `Children` object
+///
+/// If `end` hasn't yet found the end of the repetition and `parser` fails, the input will be
+/// advanced by one token and an unexpected token error will be inserted.
+///
+/// `end` is only used to determine when to stop parsing, it is just "peeked" ; the input won't be
+/// advanced and the output won't include its result.
+pub fn many0_terminated<'slice, 'src: 'slice, Lang: Language, E, IE>(
+    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+    mut end: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
+where
+    Lang::Kind: 'static,
+    E: RowanNomError<Lang>,
+{
+    move |mut input| {
+        let mut children = Children::empty();
+
+        loop {
+            if end.parse(input.clone()).is_ok() {
+                break Ok((input, children));
+            } else if let Ok((new_input, new_children)) = parser.parse(input.clone()) {
+                input = new_input;
+                children.add(new_children);
+            } else {
+                let err = if let Some(_first) = input.tokens.first().cloned() {
+                    input = input.next();
+                    E::from_message("unexpected token")
+                } else {
+                    E::from_message("unexpected eof")
+                };
+
+                children.add(Children::from_err(err));
+            }
+        }
     }
 }
 

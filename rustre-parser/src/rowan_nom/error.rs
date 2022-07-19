@@ -9,5 +9,7 @@ pub trait RowanNomError<Lang: super::Language> {
 
     fn from_unexpected_token(span: Range<usize>, expected: Lang::Kind, found: Lang::Kind) -> Self;
 
+    fn with_context(self, ctx: &'static str) -> Self;
+
     // TODO add much more errors, include location information in constructors
 }
