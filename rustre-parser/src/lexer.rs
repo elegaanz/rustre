@@ -258,17 +258,64 @@ pub enum Token {
     Error,
 
     // Composite nodes
-    /// Children: IncludeStatement + PackageList or PackageBody
+
+    // Ebnf group ProgramRules
     Root,
+
     /// Children: Include + String
     IncludeStatement,
+
+    // Ebnf group PackageRules
+
+    // Ebnf group ModelRules
+
+    // Ebnf group IdentRules
+    IdNode,
+    PragmaNode,
+
+    // Ebnf group NodesRules
+    NodeNode,
+    ParamsNode,
+
+    // Ebnf group ConstantDeclRules
+
+    // Ebnf group TypeDeclRules
+
+    // Ebnf group SimpleTypeRules
+    TypeNode,
+
+    // Ebnf group ExtNodesRules
+
+    // Ebnf group StaticRules
+    StaticParamsNode,
+    EffectiveNodeNode,
+    StaticArgsNode,
+
+    // Ebnf group BodyRules
+    BodyNode,
+    AssertEquationNode,
+    EqualsEquationNode,
+
+    // Ebnf group LeftRules
+
+    // Ebnf group ExpressionRules
+
+    // Ebnf group MergeRules
+
+    // Ebnf group PredefRules
+    PredefOp,
+
+    // Ebnf group ExpressionByNamesRules
+
+    // Ebnf group ConstantRules
+    ConstantNode,
+
     /// A list of declarations
     ///
     /// Children: ConstantDecl, TypeDecl, ExternalNodeDecl, NodeDecl
     PackageBody,
     ConstantDecl,
     TypeDecl,
-    EquationNode,
     ExpressionNode,
     ExternalNodeDecl,
     NodeDecl,
@@ -281,10 +328,7 @@ pub enum Token {
     ParamDecl,
     ParamsDecl,
     ReturnsNode,
-    StaticArgsNode,
     StaticArgNode,
-    StaticParamsNode,
-    TypeNode,
     VarDecl,
 }
 
@@ -305,6 +349,16 @@ impl rowan::Language for LustreLang {
 
     fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
         kind.into()
+    }
+}
+
+impl crate::rowan_nom::RowanNomLanguage for LustreLang {
+    fn is_trivia(kind: Self::Kind) -> bool {
+        matches!(kind, Token::Comment | Token::InlineComment | Token::Space)
+    }
+
+    fn get_error_kind() -> Self::Kind {
+        Token::Error
     }
 }
 

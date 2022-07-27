@@ -1,36 +1,37 @@
+use crate::rowan_nom::*;
 use rowan::GreenNodeBuilder;
 
 use crate::{
     lexer::Token::{self, *},
-    Parse, SyntaxNode,
+    Parse,
 };
 
+type Lang = crate::LustreLang;
+type Children = crate::rowan_nom::Children<Lang, super::Error>;
+type Input<'slice, 'src> = crate::rowan_nom::Input<'slice, 'src, Lang>;
+type IResult<'slice, 'src, E = super::Error> =
+    crate::rowan_nom::IResult<'slice, 'src, Lang, super::Error, E>;
+type RootIResult<'slice, 'src, E = super::Error> =
+    crate::rowan_nom::RootIResult<'slice, 'src, Lang, super::Error, E>;
+
+// TODO remove when nom has replaced everything
 pub struct Parser<'a> {
     /// Stack of remaining tokens
     ///
     /// The first token is at the end of the Vec (top of the stack)
-    tokens: Vec<(Token, &'a str)>,
-    builder: GreenNodeBuilder<'static>,
-    errors: Vec<super::Error>,
-    pos: usize,
+    pub(crate) tokens: Vec<(Token, &'a str)>,
+    pub(crate) builder: GreenNodeBuilder<'static>,
+    pub(crate) errors: Vec<super::Error>,
+    pub(crate) pos: usize,
 }
 
 /// Utils
+#[allow(dead_code)]
 impl<'a> Parser<'a> {
     pub fn parse(tokens: Vec<(Token, &'a str)>) -> Parse {
-        let mut parser = Parser {
-            tokens,
-            errors: Vec::new(),
-            builder: GreenNodeBuilder::new(),
-            pos: 0,
-        };
-
-        parser.file();
-
-        Parse {
-            root: SyntaxNode::new_root(parser.builder.finish()),
-            errors: parser.errors,
-        }
+        let input = Input::from(tokens.as_slice());
+        let (_, (root, errors)) = parse_program(input).expect("TODO");
+        Parse { root, errors }
     }
 
     fn start(&mut self, tok: Token) {
@@ -46,7 +47,11 @@ impl<'a> Parser<'a> {
     }
 
     fn skip_trivia(&mut self) {
-        while let Some(Comment) | Some(InlineComment) | Some(Space) = self.current() {
+        while self
+            .current()
+            .map(crate::LustreLang::is_trivia)
+            .unwrap_or(false)
+        {
             self.next();
         }
     }
@@ -64,6 +69,7 @@ impl<'a> Parser<'a> {
         self.errors.push(super::Error {
             msg: msg.to_string(),
             span: self.start_pos()..self.end_pos(),
+            cause: None,
         });
         self.next();
         self.end();
@@ -83,6 +89,7 @@ impl<'a> Parser<'a> {
         self.errors.push(super::Error {
             msg: msg.to_owned(),
             span: start..self.end_pos(),
+            cause: None,
         });
         self.end();
     }
@@ -139,13 +146,417 @@ impl<'a> Parser<'a> {
 
 static NEW_DECL: &[Token] = &[Const, Type, Node, Unsafe, Extern, Function, End];
 
+// Utils
+
+pub fn many_delimited<'slice, 'src: 'slice, IE: RowanNomError<Lang>>(
+    mut left: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    mut repeat: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    mut separator: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    mut right: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+) -> impl FnMut(Input<'slice, 'src>) -> IResult<'slice, 'src, IE> {
+    use std::ops::ControlFlow;
+
+    fn preceded_with_junk<'slice, 'src: 'slice, IE: RowanNomError<Lang>>(
+        mut parser: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+        mut right: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    ) -> impl FnMut(
+        Input<'slice, 'src>,
+    ) -> nom::IResult<Input<'slice, 'src>, ControlFlow<Children, Children>, IE> {
+        move |mut input| loop {
+            let mut children = Children::empty();
+
+            if let Ok((input, new_children)) = right.parse(input.clone()) {
+                break Ok((input, ControlFlow::Break(children + new_children)));
+            } else if let Ok((input, new_children)) = parser.parse(input.clone()) {
+                break Ok((input, ControlFlow::Continue(children + new_children)));
+                // TODO: more specific "UnexpectedToken" node below ?
+            } else if let Ok((new_input, new_children)) =
+                node(Error, t_any::<_, _, DummyError>)(input.clone())
+            {
+                input = new_input;
+                children += new_children;
+            } else {
+                // TODO: maybe don't error, but consider eof as a RIGHT equivalent + silent error
+                break Err(nom::Err::Error(IE::from_unexpected_eof(input.src_pos())));
+            }
+        }
+    }
+
+    macro_rules! preceded_with_junk {
+        ($parser:expr, $input:expr, &mut $children:ident) => {
+            match preceded_with_junk(|i| $parser.parse(i), |i| right.parse(i))($input)? {
+                (input, ControlFlow::Break(new_children)) => {
+                    return Ok((input, $children + new_children));
+                }
+                (input, ControlFlow::Continue(new_children)) => {
+                    $children += new_children;
+                    input
+                }
+            }
+        };
+    }
+
+    move |input| {
+        let (input, mut children) = left.parse(input)?;
+
+        let mut input = preceded_with_junk!(repeat, input, &mut children);
+
+        loop {
+            input = preceded_with_junk!(separator, input, &mut children);
+            input = preceded_with_junk!(repeat, input, &mut children);
+        }
+    }
+}
+
+// Ebnf group ProgramRules
+
+/// Parses en entire Lustre file (entry point to the rustre nom parser)
+///
+/// # Tolerated syntax errors
+///
+///   * Top level declarations may be in the wrong order (i.e. `include` at the end of a file), and
+///     some mutually exclusive top-level declarations may be present at the same time
+pub fn parse_program<'slice, 'src>(input: Input<'slice, 'src>) -> RootIResult<'slice, 'src> {
+    root_node(
+        Root,
+        many_delimited(success, parse_top_level_decl, success, eof),
+    )(input)
+}
+
+pub fn parse_include<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(IncludeStatement, join((t(Include), fallible(t(Str)))))(input)
+}
+
+/// Include or OneDecl (ConstDecl, TypeDecl, ExtNodeDecl, NodeDecl) or OnePack
+pub fn parse_top_level_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    // FIXME: not all possibilities are handled (see rustdoc comment just above)
+    alt((parse_include, parse_node_decl))(input)
+}
+
+// Ebnf group PackageRules
+
+// Ebnf group ModelRules
+
+// Ebnf group IdentRules
+
+pub fn parse_lv6_id_ref<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((
+        t(Ident),
+        opt(join((
+            t_raw(DoubleColon),
+            expect(t_raw(Ident), "expected ident after colon"),
+        ))),
+    ))(input)
+}
+
+pub fn parse_lv6_id<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((parse_lv6_id_ref, opt(parse_pragma)))(input)
+}
+
+pub fn parse_pragma<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        PragmaNode,
+        join((t(Percent), t(Ident), t(Colon), t(Ident), t(Percent))),
+    )(input)
+}
+
+/// Parses an Lv6Id or an Lv6IdRef wrapped in an [`IdNode`], with an optional pragma
+///
+/// This parser should be used when parsing any ID, even when only one of the two types should
+/// actually be used. This makes the parser more lax and allows for better diagnostics.
+///
+/// # Tolerated syntax errors
+///
+///   * Pragma after Lv6IdRef, when it should only occur after an Lv6Id
+///   * This parser is supposed to be called every time an Lv6Id or Lv6IdRef is expected, even if
+///     only one of those is actually valid
+#[rustfmt::skip]
+fn parse_id_any<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        IdNode,
+        join((
+            t(Ident),
+            opt(join((
+                t_raw(DoubleColon),
+                expect(t_raw(Ident), "expected ident after colon"),
+            ))),
+            opt(parse_pragma),
+        )),
+    )(input)
+}
+
+// Ebnf group NodesRules
+
+/// Parses a (potentially `unsafe`) `node` or `function` declaration
+///
+/// # Tolerated syntax errors
+///
+///   * Omitting the `〈Params〉 returns 〈Params〉` part is only allowed if defining a node alias (when
+///     an `=` sign follows)
+pub fn parse_node_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        NodeNode,
+        join((
+            parse_node_type,
+            expect(parse_id_any, "missing function or node name"),
+            parse_static_params,
+            opt(parse_params_and_returns),
+            opt(alt((parse_node_decl_definition, parse_node_decl_alias))),
+        )),
+    )(input)
+}
+
+/// Parses `node`, `function`, `unsafe node` and `unsafe function`
+///
+/// This function accepts anything that matches at least one token ; the keyword "`unsafe`" will be
+/// matched even if it isn't followed by `node` or `function`
+pub fn parse_node_type<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    alt((
+        t(Node),
+        t(Function),
+        join((
+            t(Unsafe),
+            expect(
+                alt((t(Node), t(Function))),
+                "expected `node` or `function` after `unsafe`",
+            ),
+        )),
+    ))(input)
+}
+
+/// Loosely parses `〈Params〉 returns 〈Params〉`
+///
+/// Either the first `〈Params〉` or the `returns` token must be present for the parser not to fail.
+fn parse_params_and_returns<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    alt((
+        join((
+            parse_params,
+            expect(t(Returns), "expected `returns` after params"),
+            expect(parse_params, "expected `(params...)` after `returns`"),
+        )),
+        // if the user forgot the first params, we can still attempt to parse using the `returns`
+        // token
+        join((
+            // FIXME: define a parser that immediately fails instead of attempting to parse
+            //        something we already know is missing
+            expect(parse_params, "missing params before `returns`"),
+            t(Returns),
+            expect(parse_params, "expected `(params...)` after `returns`"),
+        )),
+    ))(input)
+}
+
+/// Parses the end of a `NodeDecl`, where a definition is expected
+/// (` [ ; ] 〈LocalDecls〉 〈Body〉 ( . | [ ; ] )`)
+///
+/// # See also
+///
+///   * [`parse_node_decl_alias`].
+///
+/// Both are called by [`parse_node_decl`]
+fn parse_node_decl_definition<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((
+        opt(t(Semicolon)),
+        // TODO local decls
+        parse_body,
+        opt(alt((t(Dot), t(Semicolon)))),
+    ))(input)
+}
+
+/// Parses the end of a `NodeDecl`, where an alias is expected
+/// (` = 〈EffectiveNode〉 [ ; ]`)
+///
+/// # See also
+///
+///   * [`parse_node_decl_definition`].
+///
+/// Both are called by [`parse_node_decl`]
+fn parse_node_decl_alias<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((
+        // TODO: unexpect(Semicolon), (eat semicolon but consider it a syntax error)
+        t(Equal),
+        // TODO: parse_effective_node,
+        opt(t(Semicolon)),
+    ))(input)
+}
+
+pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        ParamsNode,
+        many_delimited(
+            t(OpenPar),
+            success, // TODO
+            t(Comma),
+            join((opt(t(Semicolon)), t(ClosePar))),
+        ),
+    )(input)
+}
+
+// Ebnf group ConstantDeclRules
+
+// Ebnf group TypeDeclRules
+
+// Ebnf group SimpleTypeRules
+
+pub fn parse_type<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        TypeNode,
+        join((
+            alt((t(Int), t(Bool), t(Real), parse_id_any)),
+            opt(join((
+                t(Hat),
+                expect(
+                    adapter::old_style(Parser::expression),
+                    "expected expression",
+                ),
+            ))),
+        )),
+    )(input)
+}
+
+// Ebnf group ExtNodesRules
+
+// Ebnf group StaticRules
+
+pub fn parse_static_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    opt(node(
+        StaticParamsNode,
+        many_delimited(
+            t(OpenStaticPar),
+            parse_static_param,
+            t(Semicolon),
+            t(CloseStaticPar),
+        ),
+    ))(input)
+}
+
+pub fn parse_static_param<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(todo!(), t(todo!()))(input)
+}
+
+pub fn parse_effective_node<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        EffectiveNodeNode,
+        join((parse_id_any, opt(parse_static_args))),
+    )(input)
+}
+
+pub fn parse_static_args<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(StaticArgsNode, t(todo!()))(input)
+}
+
+// Ebnf group BodyRules
+
+pub fn parse_body<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        BodyNode,
+        many_delimited(t(Let), parse_equation, success, t(Tel)),
+    )(input)
+}
+
+pub fn parse_equation_list<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    many0(parse_equation)(input)
+}
+
+pub fn parse_equation<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((
+        alt((parse_equation_assert, parse_equation_equals)),
+        expect(t(Semicolon), "expected semicolon after equation"),
+    ))(input)
+}
+
+fn parse_equation_assert<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        AssertEquationNode,
+        join((
+            t(Assert),
+            expect(
+                adapter::old_style(Parser::expression),
+                "expected expression after `assert`",
+            ),
+        )),
+    )(input)
+}
+
+fn parse_equation_equals<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        EqualsEquationNode,
+        join((
+            alt((
+                join((parse_left, expect(t(Equal), "missing `=` in equation"))),
+                join((
+                    expect(parse_left, "missing left operand in equation"),
+                    t(Equal),
+                )),
+            )),
+            expect(
+                adapter::old_style(Parser::expression),
+                "expected at the end of equation",
+            ),
+        )),
+    )(input)
+}
+
+// Ebnf group LeftRules
+
+pub fn parse_left<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    // TODO: a Left is just slightly more complicated than this
+    parse_id_any(input)
+}
+
+// Ebnf group ExpressionRules
+
+// Ebnf group MergeRules
+
+// Ebnf group PredefRules
+
+pub fn parse_predef_op<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        PredefOp,
+        alt((
+            t(Not),
+            t(FBy),
+            t(Pre),
+            t(Current),
+            t(Arrow),
+            t(And),
+            t(Or),
+            t(Xor),
+            t(Impl),
+            t(Equal),
+            t(Neq),
+            t(Lt),
+            t(Lte),
+            t(Gt),
+            t(Gte),
+            t(Div),
+            t(Mod),
+            t(Minus),
+            t(Plus),
+            t(Slash),
+            t(Star),
+            t(If),
+        )),
+    )(input)
+}
+
+// Ebnf group ExpressionByNamesRules
+
+// Ebnf group ConstantRules
+
+pub fn parse_constant<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(ConstantNode, alt((t(True), t(False), t(IConst), t(RConst))))(input)
+}
+
 /// Actual parsing rules
+#[allow(dead_code)]
 impl<'a> Parser<'a> {
     fn equation(&mut self) -> bool {
         let equation = self.builder.checkpoint();
 
         if self.accept(Assert) || (self.accept_left() && self.accept(Equal)) {
-            self.builder.start_node_at(equation, EquationNode.into());
+            self.builder
+                .start_node_at(equation, EqualsEquationNode.into());
         } else {
             return false;
         }
@@ -168,7 +579,7 @@ impl<'a> Parser<'a> {
         while self.equation() {}
     }
 
-    fn expression(&mut self) {
+    fn expression(&mut self) -> bool {
         // FIXME: this is an extremely stupid and lax implementation
         const TOKENS: &[Token] = &[
             True, False, IConst, RConst, Ident, Not, Minus, Pre, Current, Int, Real, When, FBy,
@@ -200,41 +611,13 @@ impl<'a> Parser<'a> {
             }
         } {}
         self.end();
-    }
-
-    pub fn file(&mut self) {
-        self.start(Root);
-
-        while self.include_statement() {}
-        while self.toplevel_decl() {}
-
-        self.end();
+        true
     }
 
     fn id_ref(&mut self) {
         // TODO that's not how it works
         //   c.f.: https://www-verimag.imag.fr/DIST-TOOLS/SYNCHRONE/lustre-v6/doc/lv6-ref-man.pdf#Lv6IdRef
         self.expect(Ident);
-    }
-
-    /// Returns true while it can parse
-    fn include_statement(&mut self) -> bool {
-        self.skip_trivia();
-        match self.current() {
-            Some(Include) => {
-                self.start(IncludeStatement);
-                self.next();
-                self.skip_trivia();
-                match self.current() {
-                    Some(Str) => self.next(),
-                    Some(_) => self.error("Unexpected token: expected a string literal"),
-                    None => self.error("Unexpected end of file"),
-                }
-                self.end();
-                true
-            }
-            _ => false,
-        }
     }
 
     fn accept_lv6_id(&mut self) -> bool {
