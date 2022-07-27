@@ -6,11 +6,13 @@ use crate::{
     Parse,
 };
 
-type Input<'slice, 'src> = crate::rowan_nom::Input<'slice, 'src, crate::LustreLang>;
+type Lang = crate::LustreLang;
+type Children = crate::rowan_nom::Children<Lang, super::Error>;
+type Input<'slice, 'src> = crate::rowan_nom::Input<'slice, 'src, Lang>;
 type IResult<'slice, 'src, E = super::Error> =
-    crate::rowan_nom::IResult<'slice, 'src, crate::LustreLang, super::Error, E>;
+    crate::rowan_nom::IResult<'slice, 'src, Lang, super::Error, E>;
 type RootIResult<'slice, 'src, E = super::Error> =
-    crate::rowan_nom::RootIResult<'slice, 'src, crate::LustreLang, super::Error, E>;
+    crate::rowan_nom::RootIResult<'slice, 'src, Lang, super::Error, E>;
 
 // TODO remove when nom has replaced everything
 pub struct Parser<'a> {
@@ -24,6 +26,7 @@ pub struct Parser<'a> {
 }
 
 /// Utils
+#[allow(dead_code)]
 impl<'a> Parser<'a> {
     pub fn parse(tokens: Vec<(Token, &'a str)>) -> Parse {
         let input = Input::from(tokens.as_slice());
@@ -143,6 +146,68 @@ impl<'a> Parser<'a> {
 
 static NEW_DECL: &[Token] = &[Const, Type, Node, Unsafe, Extern, Function, End];
 
+// Utils
+
+pub fn many_delimited<'slice, 'src: 'slice, IE: RowanNomError<Lang>>(
+    mut left: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    mut repeat: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    mut separator: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    mut right: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+) -> impl FnMut(Input<'slice, 'src>) -> IResult<'slice, 'src, IE> {
+    use std::ops::ControlFlow;
+
+    fn preceded_with_junk<'slice, 'src: 'slice, IE: RowanNomError<Lang>>(
+        mut parser: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+        mut right: impl nom::Parser<Input<'slice, 'src>, Children, IE>,
+    ) -> impl FnMut(
+        Input<'slice, 'src>,
+    ) -> nom::IResult<Input<'slice, 'src>, ControlFlow<Children, Children>, IE> {
+        move |mut input| loop {
+            let mut children = Children::empty();
+
+            if let Ok((input, new_children)) = right.parse(input.clone()) {
+                break Ok((input, ControlFlow::Break(children + new_children)));
+            } else if let Ok((input, new_children)) = parser.parse(input.clone()) {
+                break Ok((input, ControlFlow::Continue(children + new_children)));
+                // TODO: more specific "UnexpectedToken" node below ?
+            } else if let Ok((new_input, new_children)) =
+                node(Error, t_any::<_, _, DummyError>)(input.clone())
+            {
+                input = new_input;
+                children += new_children;
+            } else {
+                // TODO: maybe don't error, but consider eof as a RIGHT equivalent + silent error
+                break Err(nom::Err::Error(IE::from_unexpected_eof(input.src_pos())));
+            }
+        }
+    }
+
+    macro_rules! preceded_with_junk {
+        ($parser:expr, $input:expr, &mut $children:ident) => {
+            match preceded_with_junk(|i| $parser.parse(i), |i| right.parse(i))($input)? {
+                (input, ControlFlow::Break(new_children)) => {
+                    return Ok((input, $children + new_children));
+                }
+                (input, ControlFlow::Continue(new_children)) => {
+                    $children += new_children;
+                    input
+                }
+            }
+        };
+    }
+
+    move |input| {
+        let (input, mut children) = left.parse(input)?;
+
+        let mut input = preceded_with_junk!(repeat, input, &mut children);
+
+        loop {
+            input = preceded_with_junk!(separator, input, &mut children);
+            input = preceded_with_junk!(repeat, input, &mut children);
+        }
+    }
+}
+
 // Ebnf group ProgramRules
 
 /// Parses en entire Lustre file (entry point to the rustre nom parser)
@@ -152,7 +217,10 @@ static NEW_DECL: &[Token] = &[Const, Type, Node, Unsafe, Extern, Function, End];
 ///   * Top level declarations may be in the wrong order (i.e. `include` at the end of a file), and
 ///     some mutually exclusive top-level declarations may be present at the same time
 pub fn parse_program<'slice, 'src>(input: Input<'slice, 'src>) -> RootIResult<'slice, 'src> {
-    root_node(Root, many0(parse_top_level_decl))(input)
+    root_node(
+        Root,
+        many_delimited(success, parse_top_level_decl, success, eof),
+    )(input)
 }
 
 pub fn parse_include<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
@@ -231,7 +299,7 @@ pub fn parse_node_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
         join((
             parse_node_type,
             expect(parse_id_any, "missing function or node name"),
-            // TODO static_params // can't fail
+            parse_static_params,
             opt(parse_params_and_returns),
             opt(alt((parse_node_decl_definition, parse_node_decl_alias))),
         )),
@@ -280,6 +348,12 @@ fn parse_params_and_returns<'slice, 'src>(input: Input<'slice, 'src>) -> IResult
 
 /// Parses the end of a `NodeDecl`, where a definition is expected
 /// (` [ ; ] 〈LocalDecls〉 〈Body〉 ( . | [ ; ] )`)
+///
+/// # See also
+///
+///   * [`parse_node_decl_alias`].
+///
+/// Both are called by [`parse_node_decl`]
 fn parse_node_decl_definition<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     join((
         opt(t(Semicolon)),
@@ -291,6 +365,12 @@ fn parse_node_decl_definition<'slice, 'src>(input: Input<'slice, 'src>) -> IResu
 
 /// Parses the end of a `NodeDecl`, where an alias is expected
 /// (` = 〈EffectiveNode〉 [ ; ]`)
+///
+/// # See also
+///
+///   * [`parse_node_decl_definition`].
+///
+/// Both are called by [`parse_node_decl`]
 fn parse_node_decl_alias<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     join((
         // TODO: unexpect(Semicolon), (eat semicolon but consider it a syntax error)
@@ -303,15 +383,12 @@ fn parse_node_decl_alias<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'s
 pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
         ParamsNode,
-        join((
+        many_delimited(
             t(OpenPar),
-            many0_terminated(
-                t(Comma), // TODO
-                t(ClosePar),
-            ),
-            opt(t(Semicolon)),
-            t(ClosePar),
-        )),
+            success, // TODO
+            t(Comma),
+            join((opt(t(Semicolon)), t(ClosePar))),
+        ),
     )(input)
 }
 
@@ -321,16 +398,59 @@ pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
 
 // Ebnf group SimpleTypeRules
 
+pub fn parse_type<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        TypeNode,
+        join((
+            alt((t(Int), t(Bool), t(Real), parse_id_any)),
+            opt(join((
+                t(Hat),
+                expect(
+                    adapter::old_style(Parser::expression),
+                    "expected expression",
+                ),
+            ))),
+        )),
+    )(input)
+}
+
 // Ebnf group ExtNodesRules
 
 // Ebnf group StaticRules
+
+pub fn parse_static_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    opt(node(
+        StaticParamsNode,
+        many_delimited(
+            t(OpenStaticPar),
+            parse_static_param,
+            t(Semicolon),
+            t(CloseStaticPar),
+        ),
+    ))(input)
+}
+
+pub fn parse_static_param<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(todo!(), t(todo!()))(input)
+}
+
+pub fn parse_effective_node<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        EffectiveNodeNode,
+        join((parse_id_any, opt(parse_static_args))),
+    )(input)
+}
+
+pub fn parse_static_args<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(StaticArgsNode, t(todo!()))(input)
+}
 
 // Ebnf group BodyRules
 
 pub fn parse_body<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
         BodyNode,
-        join((t(Let), many0_terminated(parse_equation, t(Tel)), t(Tel))),
+        many_delimited(t(Let), parse_equation, success, t(Tel)),
     )(input)
 }
 
@@ -390,11 +510,46 @@ pub fn parse_left<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
 
 // Ebnf group PredefRules
 
+pub fn parse_predef_op<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        PredefOp,
+        alt((
+            t(Not),
+            t(FBy),
+            t(Pre),
+            t(Current),
+            t(Arrow),
+            t(And),
+            t(Or),
+            t(Xor),
+            t(Impl),
+            t(Equal),
+            t(Neq),
+            t(Lt),
+            t(Lte),
+            t(Gt),
+            t(Gte),
+            t(Div),
+            t(Mod),
+            t(Minus),
+            t(Plus),
+            t(Slash),
+            t(Star),
+            t(If),
+        )),
+    )(input)
+}
+
 // Ebnf group ExpressionByNamesRules
 
 // Ebnf group ConstantRules
 
+pub fn parse_constant<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(ConstantNode, alt((t(True), t(False), t(IConst), t(RConst))))(input)
+}
+
 /// Actual parsing rules
+#[allow(dead_code)]
 impl<'a> Parser<'a> {
     fn equation(&mut self) -> bool {
         let equation = self.builder.checkpoint();

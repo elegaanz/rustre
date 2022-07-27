@@ -258,18 +258,58 @@ pub enum Token {
     Error,
 
     // Composite nodes
+
+    // Ebnf group ProgramRules
+    Root,
+
+    /// Children: Include + String
+    IncludeStatement,
+
+    // Ebnf group PackageRules
+
+    // Ebnf group ModelRules
+
+    // Ebnf group IdentRules
     IdNode,
-    NodeNode,
     PragmaNode,
+
+    // Ebnf group NodesRules
+    NodeNode,
     ParamsNode,
+
+    // Ebnf group ConstantDeclRules
+
+    // Ebnf group TypeDeclRules
+
+    // Ebnf group SimpleTypeRules
+    TypeNode,
+
+    // Ebnf group ExtNodesRules
+
+    // Ebnf group StaticRules
+    StaticParamsNode,
+    EffectiveNodeNode,
+    StaticArgsNode,
+
+    // Ebnf group BodyRules
     BodyNode,
     AssertEquationNode,
     EqualsEquationNode,
 
-    /// Children: IncludeStatement + PackageList or PackageBody
-    Root,
-    /// Children: Include + String
-    IncludeStatement,
+    // Ebnf group LeftRules
+
+    // Ebnf group ExpressionRules
+
+    // Ebnf group MergeRules
+
+    // Ebnf group PredefRules
+    PredefOp,
+
+    // Ebnf group ExpressionByNamesRules
+
+    // Ebnf group ConstantRules
+    ConstantNode,
+
     /// A list of declarations
     ///
     /// Children: ConstantDecl, TypeDecl, ExternalNodeDecl, NodeDecl
@@ -288,10 +328,7 @@ pub enum Token {
     ParamDecl,
     ParamsDecl,
     ReturnsNode,
-    StaticArgsNode,
     StaticArgNode,
-    StaticParamsNode,
-    TypeNode,
     VarDecl,
 }
 
