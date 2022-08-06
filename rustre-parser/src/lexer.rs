@@ -56,7 +56,7 @@ pub enum Token {
     Current,
 
     #[token("#")]
-    Sharp,
+    Diese,
 
     #[token("div")]
     Div,
@@ -288,8 +288,12 @@ pub enum Token {
 
     // Ebnf group StaticRules
     StaticParamsNode,
+    StaticParamNode,
     EffectiveNodeNode,
     StaticArgsNode,
+    StaticArgNode,
+    NamedStaticArgsNode,
+    NamedStaticArgNode,
 
     // Ebnf group BodyRules
     BodyNode,
@@ -297,8 +301,66 @@ pub enum Token {
     EqualsEquationNode,
 
     // Ebnf group LeftRules
+    LeftNode,
+    LeftFieldAccessNode,
+    LeftTableAccessNode,
+    SelectNode,
+    StepNode,
 
     // Ebnf group ExpressionRules
+    ExpressionNode,
+
+    ParExpressionNode,
+    IdentExpressionNode,
+
+    FbyExpressionNode,
+
+    CallByPosExpressionNode,
+    ArrayAccessExpressionNode,
+
+    HatExpressionNode,
+    FieldAccessExpressionNode,
+
+    NegExpressionNode,
+    PreExpressionNode,
+    CurrentExpressionNode,
+    DieseExpressionNode,
+    NorExpressionNode,
+
+    IntExpressionNode,
+    RealExpressionNode,
+
+    WhenExpressionNode,
+
+    PowerExpressionNode,
+
+    MulExpressionNode,
+    DivExpressionNode,
+    ModExpressionNode,
+
+    AddExpressionNode,
+    SubExpressionNode,
+
+    NotExpressionNode,
+
+    LtExpressionNode,
+    LteExpressionNode,
+    EqExpressionNode,
+    GteExpressionNode,
+    GtExpressionNode,
+    NeqExpressionNode,
+
+    AndExpressionNode,
+    OrExpressionNode,
+    XorExpressionNode,
+
+    ImplExpressionNode,
+
+    ArrowExpressionNode,
+
+    ConcatExpressionNode,
+
+    IfExpressionNode,
 
     // Ebnf group MergeRules
 
@@ -316,7 +378,6 @@ pub enum Token {
     PackageBody,
     ConstantDecl,
     TypeDecl,
-    ExpressionNode,
     ExternalNodeDecl,
     NodeDecl,
     NodeAlias,
@@ -328,7 +389,6 @@ pub enum Token {
     ParamDecl,
     ParamsDecl,
     ReturnsNode,
-    StaticArgNode,
     VarDecl,
 }
 

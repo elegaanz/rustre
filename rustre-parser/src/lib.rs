@@ -66,6 +66,8 @@ impl Parse {
     pub fn parse(src: &str) -> Self {
         let lexer = lexer::Token::lexer(src).spanned();
         let tokens: Vec<_> = lexer.map(|(tok, span)| (tok, &src[span])).collect();
-        parser::Parser::parse(tokens)
+        let input = rowan_nom::Input::from(tokens.as_slice());
+        let (_, (root, errors)) = parser::parse_program(input).expect("TODO");
+        Self { root, errors }
     }
 }

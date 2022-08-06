@@ -1,10 +1,12 @@
 mod children;
 mod error;
 
+pub use nom::combinator::map;
+
 pub use children::Children;
 pub use error::*;
 use nom::Parser;
-use rowan::{SyntaxKind, SyntaxNode};
+use rowan::SyntaxNode;
 
 pub trait RowanNomLanguage: rowan::Language {
     /// Returns `true` if the token is a trivia token (whitespace or comment)
@@ -249,6 +251,21 @@ pub fn t_raw<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
     }
 }
 
+/// Makes a parser non-consuming
+///
+/// Works the same as [`nom::combinator::peek`]
+pub fn peek<'slice, 'src: 'slice, Lang: Language, E, IE>(
+    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
+where
+    Lang::Kind: 'static,
+{
+    move |input| {
+        let (_, children) = parser.parse(input.clone())?;
+        Ok((input, children))
+    }
+}
+
 pub fn fallible_with<'slice, 'src: 'slice, Lang: Language, E, IE>(
     mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
     mut convert: impl FnMut(IE) -> E,
@@ -389,20 +406,19 @@ where
     }
 }
 
-pub trait Alt<'slice, 'src, Lang: Language, E, IE> {
-    fn parse(&mut self, input: Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>;
+pub trait Alt<I, O, E> {
+    fn parse(&mut self, input: I) -> nom::IResult<I, O, E>;
 }
 
 macro_rules! impl_alt {
     ($arg0:ident, $($arg:ident),*) => {
         #[allow(unused_parens)]
-        impl<'slice, 'src: 'slice, Lang: Language, CE, IE, $arg0, $($arg),*> Alt<'slice, 'src, Lang, CE, IE> for ($arg0, $($arg,)*)
+        impl<II: Clone, OO, EE, $arg0, $($arg),*> Alt<II, OO, EE> for ($arg0, $($arg,)*)
         where
-            Lang::Kind: 'static,
-            $arg0: Parser<Input<'slice, 'src, Lang>, Children<Lang, CE>, IE>,
-            $($arg: Parser<Input<'slice, 'src, Lang>, Children<Lang, CE>, IE>),*
+            $arg0: Parser<II, OO, EE>,
+            $($arg: Parser<II, OO, EE>),*
         {
-            fn parse(&mut self, input: Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, CE, IE> {
+            fn parse(&mut self, input: II) -> nom::IResult<II, OO, EE> {
                 #[allow(non_snake_case)]
                 let ($arg0, $($arg),*) = self;
 
@@ -440,9 +456,7 @@ impl_alt!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X
 impl_alt!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y);
 impl_alt!(A, B, C, D, E, F, G, H, I, J, K, L, M, N, O, P, Q, R, S, T, U, V, W, X, Y, Z);
 
-pub fn alt<'slice, 'src: 'slice, Lang: Language, E, IE>(
-    mut parsers: impl Alt<'slice, 'src, Lang, E, IE>,
-) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE> {
+pub fn alt<I, O, E>(mut parsers: impl Alt<I, O, E>) -> impl FnMut(I) -> nom::IResult<I, O, E> {
     move |input| parsers.parse(input)
 }
 
@@ -469,54 +483,52 @@ where
     }
 }
 
-/// FIXME: remove all the following once the nom migration is complete
-pub mod adapter {
-    use super::*;
-    use crate::parser::Parser;
-    use rowan::GreenNodeBuilder;
+/// Similar to [`nom::multi::fold_many1`], but more specialized
+///
+/// Useful for parsing left-associative expressions
+pub fn fold_many1<'slice, 'src: 'slice, Lang: Language, C, E, IE>(
+    mut init: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+    mut then: impl Parser<Input<'slice, 'src, Lang>, C, IE>,
+    mut merge: impl FnMut(Children<Lang, E>, C) -> Children<Lang, E>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
+where
+    Lang::Kind: 'static,
+{
+    move |input| {
+        let (mut input, mut children) = init.parse(input)?;
 
-    const DUMMY_SYNTAX: SyntaxKind = SyntaxKind(65535);
+        while let Ok((new_input, new_children)) = then.parse(input.clone()) {
+            input = new_input;
+            children = merge(children, new_children);
+        }
 
-    pub fn old_style<'slice, 'src: 'slice, IE: RowanNomError<crate::LustreLang>>(
-        f: impl Fn(&mut Parser<'src>) -> bool,
-    ) -> impl FnMut(
-        Input<'slice, 'src, crate::LustreLang>,
-    ) -> IResult<'slice, 'src, crate::LustreLang, crate::Error, IE> {
-        move |input| {
-            let mut builder = GreenNodeBuilder::new();
-            builder.start_node(DUMMY_SYNTAX);
+        Ok((input, children))
+    }
+}
 
-            let mut parser = Parser {
-                tokens: input
-                    .trivia_tokens
-                    .iter()
-                    .chain(input.tokens)
-                    .rev()
-                    .cloned()
-                    .collect(),
-                builder,
-                errors: vec![],
-                pos: input.src_pos,
-            };
+/// Similar to [`fold_many1`], but folds right instead of left
+///
+/// Useful for parsing right-associative expressions
+pub fn fold_many1_right<'slice, 'src: 'slice, Lang: Language, C, E, IE>(
+    mut cont: impl Parser<Input<'slice, 'src, Lang>, C, IE>,
+    mut end: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+    mut merge: impl FnMut(Children<Lang, E>, C) -> Children<Lang, E>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
+where
+    Lang::Kind: 'static,
+{
+    move |mut input| {
+        let mut stack = Vec::new();
 
-            if f(&mut parser) {
-                parser.builder.finish_node();
-
-                let consumed = input.tokens.len() + input.trivia_tokens.len() - parser.tokens.len();
-                let mut input2 = input;
-                for _ in 0..consumed {
-                    input2.next_raw();
-                }
-
-                Ok((
-                    input2,
-                    Children::from_rowan_children(
-                        parser.builder.finish().children(),
-                        parser.errors,
-                    ),
-                ))
+        loop {
+            if let Ok((new_input, new_children)) = cont.parse(input.clone()) {
+                input = new_input;
+                stack.push(new_children);
+            } else if let Ok((input, new_children)) = end.parse(input) {
+                let children = stack.into_iter().rfold(new_children, |a, b| merge(a, b));
+                break Ok((input, children));
             } else {
-                Err(nom::Err::Error(IE::from_message("parser failed")))
+                todo!("error")
             }
         }
     }
