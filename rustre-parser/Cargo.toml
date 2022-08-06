@@ -10,6 +10,7 @@ repository = "https://github.com/elegaanz/rustre"
 logos = "0.12.1"
 nom = "7.1.1"
 rowan = "0.15.5"
+thiserror = "1.0"
 
 [build-dependencies]
 ungrammar = "1.16"
