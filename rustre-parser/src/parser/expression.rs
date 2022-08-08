@@ -126,7 +126,7 @@ pub fn parse_expression_0<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
     fold_many1(
         parse_expression_terminal,
         alt((
-            map(parse_expression_list_par, |c| (c, CallByPosExpressionNode)),
+            map(parse_call_par, |c| (c, CallByPosExpressionNode)),
             map(parse_array_brackets, |c| (c, ArrayAccessExpressionNode)),
         )),
         |a, (b, n)| (a + b).into_node(n).into_node(ExpressionNode),
@@ -195,7 +195,18 @@ pub fn parse_expression_6<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
 }
 
 pub fn parse_expression_7<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    parse_expression_left(parse_ops!(When => WhenExpressionNode), parse_expression_6)(input)
+    fold_many1(
+        parse_expression_6,
+        join((
+            t(When),
+            expect(parse_clock_expr, "expected clock expression after `when`"),
+        )),
+        |a, b| {
+            (a + b)
+                .into_node(WhenExpressionNode)
+                .into_node(ExpressionNode)
+        },
+    )(input)
 }
 
 pub fn parse_expression_8<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
@@ -280,11 +291,12 @@ pub fn parse_expression_19<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<
 
 pub fn parse_expression_20<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     alt((
+        // TODO handle `with` separately
         expr_node(
             IfExpressionNode,
             // TODO check associativity compliance of `if then else`
             join((
-                t(If),
+                alt((t(If), t(With))),
                 parse_expression_20,
                 t(Then),
                 parse_expression_20,
@@ -310,7 +322,34 @@ pub fn parse_expression_list_par<'slice, 'src>(
     many_delimited(t(OpenPar), parse_expression, t(Comma), t(ClosePar))(input)
 }
 
+fn parse_call_par<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((
+        opt(static_rules::parse_static_args),
+        parse_expression_list_par,
+    ))(input)
+}
+
 fn parse_array_brackets<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     // TODO select
     join((t(OpenBracket), parse_expression, t(CloseBracket)))(input)
+}
+
+pub fn parse_clock_expr<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        ClockExpressionNode,
+        alt((
+            join((
+                parse_id_any,
+                opt(join((
+                    t(OpenPar),
+                    expect(parse_id_any, "expected identifier"),
+                    t(ClosePar),
+                ))),
+            )),
+            join((
+                t(Not),
+                alt((parse_id_any, join((t(OpenPar), parse_id_any, t(ClosePar))))),
+            )),
+        )),
+    )(input)
 }

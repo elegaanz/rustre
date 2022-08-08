@@ -27,22 +27,24 @@ pub fn many_delimited<'slice, 'src: 'slice, IE: RowanNomError<Lang>>(
     ) -> impl FnMut(
         Input<'slice, 'src>,
     ) -> nom::IResult<Input<'slice, 'src>, ControlFlow<Children, Children>, IE> {
-        move |mut input| loop {
+        move |mut input| {
             let mut children = Children::empty();
 
-            if let Ok((input, new_children)) = right.parse(input.clone()) {
-                break Ok((input, ControlFlow::Break(children + new_children)));
-            } else if let Ok((input, new_children)) = parser.parse(input.clone()) {
-                break Ok((input, ControlFlow::Continue(children + new_children)));
-                // TODO: more specific "UnexpectedToken" node below ?
-            } else if let Ok((new_input, new_children)) =
-                node(Error, t_any::<_, _, DummyError>)(input.clone())
-            {
-                input = new_input;
-                children += new_children;
-            } else {
-                // TODO: maybe don't error, but consider eof as a RIGHT equivalent + silent error
-                break Err(nom::Err::Error(IE::from_unexpected_eof(input.src_pos())));
+            loop {
+                if let Ok((input, new_children)) = right.parse(input.clone()) {
+                    break Ok((input, ControlFlow::Break(children + new_children)));
+                } else if let Ok((input, new_children)) = parser.parse(input.clone()) {
+                    break Ok((input, ControlFlow::Continue(children + new_children)));
+                } else if let Ok((new_input, new_children)) =
+                    t_any::<_, _, DummyError>(input.clone())
+                {
+                    input = new_input;
+                    // TODO: more specific "UnexpectedToken" node below ?
+                    children += new_children.into_node(Error);
+                } else {
+                    // TODO: maybe don't error, but consider eof as a RIGHT equivalent + silent error
+                    break Err(nom::Err::Error(IE::from_unexpected_eof(input.src_pos())));
+                }
             }
         }
     }
@@ -95,7 +97,12 @@ pub fn parse_include<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice
 /// Include or OneDecl (ConstDecl, TypeDecl, ExtNodeDecl, NodeDecl) or OnePack
 pub fn parse_top_level_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     // FIXME: not all possibilities are handled (see rustdoc comment just above)
-    alt((parse_include, parse_node_decl))(input)
+    alt((
+        parse_include,
+        constant_decl::parse_const_decl,
+        type_decl::parse_type_decl,
+        parse_node_decl,
+    ))(input)
 }
 
 // Ebnf group PackageRules
@@ -151,6 +158,9 @@ fn parse_id_any<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'sr
 }
 
 // Ebnf group NodesRules
+
+// TODO move everything in there
+pub mod nodes;
 
 /// Parses a (potentially `unsafe`) `node` or `function` declaration
 ///
@@ -222,7 +232,7 @@ fn parse_params_and_returns<'slice, 'src>(input: Input<'slice, 'src>) -> IResult
 fn parse_node_decl_definition<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     join((
         opt(t(Semicolon)),
-        // TODO local decls
+        opt(nodes::parse_local_decl_list),
         parse_body,
         opt(alt((t(Dot), t(Semicolon)))),
     ))(input)
@@ -240,7 +250,7 @@ fn parse_node_decl_alias<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'s
     join((
         // TODO: unexpect(Semicolon), (eat semicolon but consider it a syntax error)
         t(Equal),
-        // TODO: parse_effective_node,
+        static_rules::parse_effective_node,
         opt(t(Semicolon)),
     ))(input)
 }
@@ -250,7 +260,7 @@ pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
         ParamsNode,
         many_delimited(
             t(OpenPar),
-            success, // TODO
+            nodes::parse_var_decl,
             t(Comma),
             join((opt(t(Semicolon)), t(ClosePar))),
         ),
@@ -259,7 +269,11 @@ pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
 
 // Ebnf group ConstantDeclRules
 
+pub mod constant_decl;
+
 // Ebnf group TypeDeclRules
+
+pub mod type_decl;
 
 // Ebnf group SimpleTypeRules
 

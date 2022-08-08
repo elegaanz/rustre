@@ -266,6 +266,22 @@ where
     }
 }
 
+/// Negated peek, succeeds only if the given parser fails
+///
+///   * On failure, succeeds with and empty [`Children`] and the same input
+///   * On success, fails
+pub fn peek_neg<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
+    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
+where
+    Lang::Kind: 'static,
+{
+    move |input| match parser.parse(input.clone()) {
+        Ok(_) => Err(nom::Err::Error(IE::from_message("neg_peek"))),
+        Err(_) => Ok((input, Children::empty())),
+    }
+}
+
 pub fn fallible_with<'slice, 'src: 'slice, Lang: Language, E, IE>(
     mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
     mut convert: impl FnMut(IE) -> E,

@@ -274,12 +274,20 @@ pub enum Token {
     PragmaNode,
 
     // Ebnf group NodesRules
+    TypedLv6IdsNode,
+    TypedValuedLv6IdNode,
     NodeNode,
     ParamsNode,
 
     // Ebnf group ConstantDeclRules
+    ConstantDeclNode,
+    OneConstantDeclNode,
 
     // Ebnf group TypeDeclRules
+    TypeDeclNode,
+    OneTypeDeclNode,
+    EnumDeclNode,
+    StructDeclNode,
 
     // Ebnf group SimpleTypeRules
     TypeNode,
@@ -362,6 +370,8 @@ pub enum Token {
 
     IfExpressionNode,
 
+    ClockExpressionNode,
+
     // Ebnf group MergeRules
 
     // Ebnf group PredefRules
@@ -376,8 +386,6 @@ pub enum Token {
     ///
     /// Children: ConstantDecl, TypeDecl, ExternalNodeDecl, NodeDecl
     PackageBody,
-    ConstantDecl,
-    TypeDecl,
     ExternalNodeDecl,
     NodeDecl,
     NodeAlias,
