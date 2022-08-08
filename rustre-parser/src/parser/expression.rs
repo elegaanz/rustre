@@ -330,8 +330,11 @@ fn parse_call_par<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
 }
 
 fn parse_array_brackets<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    // TODO select
-    join((t(OpenBracket), parse_expression, t(CloseBracket)))(input)
+    join((
+        t(OpenBracket),
+        alt((left::parse_select, parse_expression)),
+        t(CloseBracket),
+    ))(input)
 }
 
 pub fn parse_clock_expr<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
