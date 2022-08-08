@@ -22,7 +22,7 @@ pub fn parse_ext_node_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<
             parse_ext_node_type,
             expect(parse_id_any, "missing external node name"),
             expect(
-                parse_params_and_returns,
+                nodes::parse_params_and_returns,
                 "missing signature (params and returned values)",
             ),
             opt(t(Semicolon)),

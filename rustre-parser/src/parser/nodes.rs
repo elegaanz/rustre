@@ -40,6 +40,111 @@ pub fn parse_typed_valued_lv6_id<'slice, 'src>(
     )(input)
 }
 
+/// Parses a (potentially `unsafe`) `node` or `function` declaration
+///
+/// # Tolerated syntax errors
+///
+///   * Omitting the `〈Params〉 returns 〈Params〉` part is only allowed if defining a node alias (when
+///     an `=` sign follows)
+pub fn parse_node_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        NodeNode,
+        join((
+            parse_node_type,
+            expect(parse_id_any, "missing function or node name"),
+            static_rules::parse_static_params,
+            opt(parse_params_and_returns),
+            opt(alt((parse_node_decl_definition, parse_node_decl_alias))),
+        )),
+    )(input)
+}
+
+/// Parses `node`, `function`, `unsafe node` and `unsafe function`
+///
+/// This function accepts anything that matches at least one token ; the keyword "`unsafe`" will be
+/// matched even if it isn't followed by `node` or `function`
+pub fn parse_node_type<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    alt((
+        t(Node),
+        t(Function),
+        join((
+            t(Unsafe),
+            expect(
+                alt((t(Node), t(Function))),
+                "expected `node` or `function` after `unsafe`",
+            ),
+        )),
+    ))(input)
+}
+
+/// Loosely parses `〈Params〉 returns 〈Params〉`
+///
+/// Either the first `〈Params〉` or the `returns` token must be present for the parser not to fail.
+pub fn parse_params_and_returns<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    alt((
+        join((
+            parse_params,
+            expect(t(Returns), "expected `returns` after params"),
+            expect(parse_params, "expected `(params...)` after `returns`"),
+        )),
+        // if the user forgot the first params, we can still attempt to parse using the `returns`
+        // token
+        join((
+            // FIXME: define a parser that immediately fails instead of attempting to parse
+            //        something we already know is missing
+            expect(parse_params, "missing params before `returns`"),
+            t(Returns),
+            expect(parse_params, "expected `(params...)` after `returns`"),
+        )),
+    ))(input)
+}
+
+/// Parses the end of a `NodeDecl`, where a definition is expected
+/// (` [ ; ] 〈LocalDecls〉 〈Body〉 ( . | [ ; ] )`)
+///
+/// # See also
+///
+///   * [`parse_node_decl_alias`].
+///
+/// Both are called by [`parse_node_decl`]
+fn parse_node_decl_definition<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((
+        opt(t(Semicolon)),
+        opt(nodes::parse_local_decl_list),
+        parse_body,
+        opt(alt((t(Dot), t(Semicolon)))),
+    ))(input)
+}
+
+/// Parses the end of a `NodeDecl`, where an alias is expected
+/// (` = 〈EffectiveNode〉 [ ; ]`)
+///
+/// # See also
+///
+///   * [`parse_node_decl_definition`].
+///
+/// Both are called by [`parse_node_decl`]
+fn parse_node_decl_alias<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    join((
+        // TODO: unexpect(Semicolon), (eat semicolon but consider it a syntax error)
+        t(Equal),
+        static_rules::parse_effective_node,
+        opt(t(Semicolon)),
+    ))(input)
+}
+
+pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(
+        ParamsNode,
+        many_delimited(
+            t(OpenPar),
+            nodes::parse_var_decl,
+            t(Comma),
+            join((opt(t(Semicolon)), t(ClosePar))),
+        ),
+    )(input)
+}
+
 pub fn parse_local_decl_list<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     join((parse_one_local_decl, many0(parse_one_local_decl)))(input)
 }

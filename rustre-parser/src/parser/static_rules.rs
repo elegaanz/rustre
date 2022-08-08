@@ -26,12 +26,12 @@ pub fn parse_static_param<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
                 ),
             )),
             join((
-                parse_node_type,
+                nodes::parse_node_type,
                 expect(
                     join((
                         parse_id_any,
                         expect(
-                            parse_params_and_returns,
+                            nodes::parse_params_and_returns,
                             "signature must include params and return values",
                         ),
                     )),
