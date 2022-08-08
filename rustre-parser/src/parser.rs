@@ -101,6 +101,7 @@ pub fn parse_top_level_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult
         parse_include,
         constant_decl::parse_const_decl,
         type_decl::parse_type_decl,
+        ext_nodes::parse_ext_node_decl,
         parse_node_decl,
     ))(input)
 }
@@ -295,6 +296,8 @@ fn parse_type_hat<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
 }
 
 // Ebnf group ExtNodesRules
+
+pub mod ext_nodes;
 
 // Ebnf group StaticRules
 

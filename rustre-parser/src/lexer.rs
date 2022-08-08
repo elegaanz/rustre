@@ -293,6 +293,7 @@ pub enum Token {
     TypeNode,
 
     // Ebnf group ExtNodesRules
+    ExternalNodeDeclNode,
 
     // Ebnf group StaticRules
     StaticParamsNode,
@@ -386,7 +387,6 @@ pub enum Token {
     ///
     /// Children: ConstantDecl, TypeDecl, ExternalNodeDecl, NodeDecl
     PackageBody,
-    ExternalNodeDecl,
     NodeDecl,
     NodeAlias,
     ModelDecl,
