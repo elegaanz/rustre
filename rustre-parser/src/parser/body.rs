@@ -47,7 +47,7 @@ fn parse_equation_equals<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'s
             )),
             expect(
                 expression::parse_expression,
-                "expected at the end of equation",
+                "expected expression at the right of the equation",
             ),
         )),
     )(input)

@@ -326,6 +326,7 @@ pub enum Token {
     ExpressionNode,
 
     ParExpressionNode,
+    ArrayLiteralExpressionNode,
     IdentExpressionNode,
 
     FbyExpressionNode,

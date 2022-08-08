@@ -36,7 +36,7 @@ pub fn parse_left_item<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
 pub fn parse_select<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
         SelectNode,
-        alt((
+        join((
             expression::parse_expression_15,
             t(CDots),
             expect(

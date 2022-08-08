@@ -112,13 +112,10 @@ fn parse_expression_no_assoc<'slice, 'src: 'slice>(
 pub fn parse_expression_terminal<'slice, 'src>(
     input: Input<'slice, 'src>,
 ) -> IResult<'slice, 'src> {
-    expect(
-        alt((
-            node(ExpressionNode, parse_constant),
-            expr_node(IdentExpressionNode, ident::parse_id_any),
-        )),
-        "expected expression",
-    )(input)
+    alt((
+        node(ExpressionNode, parse_constant),
+        expr_node(IdentExpressionNode, ident::parse_id_any),
+    ))(input)
 }
 
 // This one doesn't really exist but it is never mentioned in the spec
@@ -142,6 +139,7 @@ pub use parse_expression_1 as parse_expression_2; // TODO
 pub fn parse_expression_3<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     alt((
         expr_node(ParExpressionNode, parse_expression_list_par),
+        expr_node(ArrayLiteralExpressionNode, parse_expression_list_bracket),
         parse_expression_2,
     ))(input)
 }
@@ -320,6 +318,12 @@ pub fn parse_expression_list_par<'slice, 'src>(
     input: Input<'slice, 'src>,
 ) -> IResult<'slice, 'src> {
     many_delimited(t(OpenPar), parse_expression, t(Comma), t(ClosePar))(input)
+}
+
+pub fn parse_expression_list_bracket<'slice, 'src>(
+    input: Input<'slice, 'src>,
+) -> IResult<'slice, 'src> {
+    many_delimited(t(OpenBracket), parse_expression, t(Comma), t(CloseBracket))(input)
 }
 
 fn parse_call_par<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {

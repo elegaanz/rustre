@@ -251,7 +251,9 @@ pub fn t_raw<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
     }
 }
 
-/// Makes a parser non-consuming
+/// Makes a parser peek without consuming
+///
+/// Returns `Ok((same_input, Children::empty()))` or the error returned by the wrapped parser
 ///
 /// Works the same as [`nom::combinator::peek`]
 pub fn peek<'slice, 'src: 'slice, Lang: Language, E, IE>(
@@ -261,8 +263,8 @@ where
     Lang::Kind: 'static,
 {
     move |input| {
-        let (_, children) = parser.parse(input.clone())?;
-        Ok((input, children))
+        let (_, _) = parser.parse(input.clone())?;
+        Ok((input, Children::empty()))
     }
 }
 
@@ -525,7 +527,7 @@ where
 /// Similar to [`fold_many1`], but folds right instead of left
 ///
 /// Useful for parsing right-associative expressions
-pub fn fold_many1_right<'slice, 'src: 'slice, Lang: Language, C, E, IE>(
+pub fn fold_many1_right<'slice, 'src: 'slice, Lang: Language, C, E, IE: RowanNomError<Lang>>(
     mut cont: impl Parser<Input<'slice, 'src, Lang>, C, IE>,
     mut end: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
     mut merge: impl FnMut(Children<Lang, E>, C) -> Children<Lang, E>,
@@ -544,7 +546,7 @@ where
                 let children = stack.into_iter().rfold(new_children, |a, b| merge(a, b));
                 break Ok((input, children));
             } else {
-                todo!("error")
+                break Err(nom::Err::Error(IE::from_message("couldn't finish fold")));
             }
         }
     }
