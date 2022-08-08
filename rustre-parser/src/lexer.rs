@@ -266,8 +266,14 @@ pub enum Token {
     IncludeStatement,
 
     // Ebnf group PackageRules
+    PackageDeclNode,
+    PackageDeclBody,
+    PackageAliasNode,
+    UsesNode,
 
     // Ebnf group ModelRules
+    ProvidesNode,
+    ModelDeclNode,
 
     // Ebnf group IdentRules
     IdNode,
@@ -382,22 +388,6 @@ pub enum Token {
 
     // Ebnf group ConstantRules
     ConstantNode,
-
-    /// A list of declarations
-    ///
-    /// Children: ConstantDecl, TypeDecl, ExternalNodeDecl, NodeDecl
-    PackageBody,
-    NodeDecl,
-    NodeAlias,
-    ModelDecl,
-    PackageAlias,
-    PackageDecl,
-    /// Children: ModelDecl, PackageDecl, PackageAlias
-    PackageList,
-    ParamDecl,
-    ParamsDecl,
-    ReturnsNode,
-    VarDecl,
 }
 
 impl From<Token> for rowan::SyntaxKind {

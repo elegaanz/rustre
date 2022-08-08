@@ -139,7 +139,7 @@ pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
         many_delimited(
             t(OpenPar),
             nodes::parse_var_decl,
-            t(Comma),
+            t(Semicolon),
             join((opt(t(Semicolon)), t(ClosePar))),
         ),
     )(input)

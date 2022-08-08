@@ -41,6 +41,9 @@ pub fn many_delimited<'slice, 'src: 'slice, IE: RowanNomError<Lang>>(
                     input = new_input;
                     // TODO: more specific "UnexpectedToken" node below ?
                     children += new_children.into_node(Error);
+
+                    let err = super::Error::from_message("many_preceded is skipping");
+                    children += Children::from_err(err);
                 } else {
                     // TODO: maybe don't error, but consider eof as a RIGHT equivalent + silent error
                     break Err(nom::Err::Error(IE::from_unexpected_eof(input.src_pos())));
@@ -103,12 +106,19 @@ pub fn parse_top_level_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult
         type_decl::parse_type_decl,
         ext_nodes::parse_ext_node_decl,
         nodes::parse_node_decl,
+        model::parse_model_decl,
+        package::parse_pack_decl,
+        package::parse_pack_eq,
     ))(input)
 }
 
 // Ebnf group PackageRules
 
+pub mod package;
+
 // Ebnf group ModelRules
+
+pub mod model;
 
 // Ebnf group IdentRules
 

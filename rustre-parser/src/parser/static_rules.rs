@@ -87,18 +87,6 @@ pub fn parse_static_arg<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
     )(input)
 }
 
-pub fn parse_named_static_args<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(
-        NamedStaticArgsNode,
-        many_delimited(
-            t(OpenStaticPar),
-            parse_named_static_arg,
-            alt((t(Comma), t(Semicolon))),
-            t(CloseStaticPar),
-        ),
-    )(input)
-}
-
 pub fn parse_named_static_arg<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(NamedStaticArgNode, t(todo!()))(input)
 }
