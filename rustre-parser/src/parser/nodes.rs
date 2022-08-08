@@ -4,10 +4,10 @@ pub fn parse_typed_lv6_ids<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<
     node(
         TypedLv6IdsNode,
         join((
-            parse_lv6_id,
+            ident::parse_lv6_id,
             many0(join((
                 t(Comma),
-                expect(parse_lv6_id, "expected another identifier after `,`"),
+                expect(ident::parse_lv6_id, "expected another identifier after `,`"),
             ))),
             expect(
                 join((t(Colon), expect(parse_type, "missing type expression"))),
@@ -23,10 +23,10 @@ pub fn parse_typed_valued_lv6_id<'slice, 'src>(
     node(
         TypedValuedLv6IdNode,
         join((
-            parse_lv6_id,
+            ident::parse_lv6_id,
             many0(join((
                 t(Comma),
-                expect(parse_lv6_id, "expected other field name after `,`"),
+                expect(ident::parse_lv6_id, "expected other field name after `,`"),
             ))),
             opt(join((
                 t(Colon),
@@ -51,7 +51,7 @@ pub fn parse_node_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
         NodeNode,
         join((
             parse_node_type,
-            expect(parse_id_any, "missing function or node name"),
+            expect(ident::parse_id_any, "missing function or node name"),
             static_rules::parse_static_params,
             opt(parse_params_and_returns),
             opt(alt((parse_node_decl_definition, parse_node_decl_alias))),
@@ -111,7 +111,7 @@ fn parse_node_decl_definition<'slice, 'src>(input: Input<'slice, 'src>) -> IResu
     join((
         opt(t(Semicolon)),
         opt(nodes::parse_local_decl_list),
-        parse_body,
+        body::parse_body,
         opt(alt((t(Dot), t(Semicolon)))),
     ))(input)
 }

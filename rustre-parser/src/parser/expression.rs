@@ -115,7 +115,7 @@ pub fn parse_expression_terminal<'slice, 'src>(
     expect(
         alt((
             node(ExpressionNode, parse_constant),
-            expr_node(IdentExpressionNode, parse_id_any),
+            expr_node(IdentExpressionNode, ident::parse_id_any),
         )),
         "expected expression",
     )(input)
@@ -342,16 +342,19 @@ pub fn parse_clock_expr<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
         ClockExpressionNode,
         alt((
             join((
-                parse_id_any,
+                ident::parse_id_any,
                 opt(join((
                     t(OpenPar),
-                    expect(parse_id_any, "expected identifier"),
+                    expect(ident::parse_id_any, "expected identifier"),
                     t(ClosePar),
                 ))),
             )),
             join((
                 t(Not),
-                alt((parse_id_any, join((t(OpenPar), parse_id_any, t(ClosePar))))),
+                alt((
+                    ident::parse_id_any,
+                    join((t(OpenPar), ident::parse_id_any, t(ClosePar))),
+                )),
             )),
         )),
     )(input)

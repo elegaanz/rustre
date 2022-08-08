@@ -10,7 +10,7 @@ pub fn parse_type_decls<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
 
 pub fn parse_one_type_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     join((
-        parse_lv6_id,
+        ident::parse_lv6_id,
         opt(join((
             t(Equal),
             expect(
@@ -28,7 +28,7 @@ fn parse_enum_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 
         join((
             t(Enum),
             expect(
-                many_delimited(t(OpenBrace), parse_lv6_id, t(Comma), t(CloseBrace)),
+                many_delimited(t(OpenBrace), ident::parse_lv6_id, t(Comma), t(CloseBrace)),
                 "missing `{}` after `enum`",
             ),
         )),

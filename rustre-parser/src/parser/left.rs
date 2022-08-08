@@ -12,9 +12,11 @@ pub fn parse_left<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
 
 pub fn parse_left_item<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     fold_many1(
-        parse_id_any,
+        ident::parse_id_any,
         alt((
-            map(join((t(Dot), parse_id_any)), |c| (c, LeftFieldAccessNode)),
+            map(join((t(Dot), ident::parse_id_any)), |c| {
+                (c, LeftFieldAccessNode)
+            }),
             map(
                 join((
                     t(OpenBracket),

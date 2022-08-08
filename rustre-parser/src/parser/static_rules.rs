@@ -16,10 +16,13 @@ pub fn parse_static_param<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
     node(
         StaticParamNode,
         alt((
-            join((t(Type), expect(parse_id_any, "expected id after `type`"))),
+            join((
+                t(Type),
+                expect(ident::parse_id_any, "expected id after `type`"),
+            )),
             join((
                 t(Const),
-                expect(parse_id_any, "expected id after `const`"),
+                expect(ident::parse_id_any, "expected id after `const`"),
                 expect(
                     join((t(Colon), expect(parse_type, "expected type after colon"))),
                     "const static param must specify a type",
@@ -29,7 +32,7 @@ pub fn parse_static_param<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
                 nodes::parse_node_type,
                 expect(
                     join((
-                        parse_id_any,
+                        ident::parse_id_any,
                         expect(
                             nodes::parse_params_and_returns,
                             "signature must include params and return values",
@@ -45,7 +48,7 @@ pub fn parse_static_param<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
 pub fn parse_effective_node<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
         EffectiveNodeNode,
-        join((parse_id_any, opt(parse_static_args))),
+        join((ident::parse_id_any, opt(parse_static_args))),
     )(input)
 }
 
@@ -101,7 +104,10 @@ pub fn parse_named_static_arg<'slice, 'src>(input: Input<'slice, 'src>) -> IResu
 }
 
 pub fn parse_surely_node<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(EffectiveNodeNode, join((parse_id_any, parse_static_args)))(input)
+    node(
+        EffectiveNodeNode,
+        join((ident::parse_id_any, parse_static_args)),
+    )(input)
 }
 
 pub fn parse_surely_type<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {

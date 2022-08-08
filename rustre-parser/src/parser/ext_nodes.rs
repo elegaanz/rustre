@@ -20,7 +20,7 @@ pub fn parse_ext_node_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<
         ExternalNodeDeclNode,
         join((
             parse_ext_node_type,
-            expect(parse_id_any, "missing external node name"),
+            expect(ident::parse_id_any, "missing external node name"),
             expect(
                 nodes::parse_params_and_returns,
                 "missing signature (params and returned values)",

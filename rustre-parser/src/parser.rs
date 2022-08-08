@@ -112,55 +112,10 @@ pub fn parse_top_level_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult
 
 // Ebnf group IdentRules
 
-pub fn parse_lv6_id_ref<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    join((
-        t(Ident),
-        opt(join((
-            t_raw(DoubleColon),
-            expect(t_raw(Ident), "expected ident after colon"),
-        ))),
-    ))(input)
-}
-
-pub fn parse_lv6_id<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    join((parse_lv6_id_ref, opt(parse_pragma)))(input)
-}
-
-pub fn parse_pragma<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(
-        PragmaNode,
-        join((t(Percent), t(Ident), t(Colon), t(Ident), t(Percent))),
-    )(input)
-}
-
-/// Parses an Lv6Id or an Lv6IdRef wrapped in an [`IdNode`], with an optional pragma
-///
-/// This parser should be used when parsing any ID, even when only one of the two types should
-/// actually be used. This makes the parser more lax and allows for better diagnostics.
-///
-/// # Tolerated syntax errors
-///
-///   * Pragma after Lv6IdRef, when it should only occur after an Lv6Id
-///   * This parser is supposed to be called every time an Lv6Id or Lv6IdRef is expected, even if
-///     only one of those is actually valid
-#[rustfmt::skip]
-fn parse_id_any<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(
-        IdNode,
-        join((
-            t(Ident),
-            opt(join((
-                t_raw(DoubleColon),
-                expect(t_raw(Ident), "expected ident after colon"),
-            ))),
-            opt(parse_pragma),
-        )),
-    )(input)
-}
+pub mod ident;
 
 // Ebnf group NodesRules
 
-// TODO move everything in there
 pub mod nodes;
 
 // Ebnf group ConstantDeclRules
@@ -177,7 +132,7 @@ pub fn parse_type<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
     node(
         TypeNode,
         join((
-            alt((t(Int), t(Bool), t(Real), parse_id_any)),
+            alt((t(Int), t(Bool), t(Real), ident::parse_id_any)),
             parse_type_hat,
         )),
     )(input)
@@ -200,58 +155,7 @@ pub mod static_rules;
 
 // Ebnf group BodyRules
 
-pub fn parse_body<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(
-        BodyNode,
-        many_delimited(t(Let), parse_equation, success, t(Tel)),
-    )(input)
-}
-
-pub fn parse_equation_list<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    many0(parse_equation)(input)
-}
-
-pub fn parse_equation<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    join((
-        alt((parse_equation_assert, parse_equation_equals)),
-        expect(t(Semicolon), "expected semicolon after equation"),
-    ))(input)
-}
-
-fn parse_equation_assert<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(
-        AssertEquationNode,
-        join((
-            t(Assert),
-            expect(
-                expression::parse_expression,
-                "expected expression after `assert`",
-            ),
-        )),
-    )(input)
-}
-
-fn parse_equation_equals<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(
-        EqualsEquationNode,
-        join((
-            alt((
-                join((
-                    left::parse_left,
-                    expect(t(Equal), "missing `=` in equation"),
-                )),
-                join((
-                    expect(left::parse_left, "missing left operand in equation"),
-                    t(Equal),
-                )),
-            )),
-            expect(
-                expression::parse_expression,
-                "expected at the end of equation",
-            ),
-        )),
-    )(input)
-}
+pub mod body;
 
 // Ebnf group LeftRules
 
