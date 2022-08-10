@@ -46,4 +46,5 @@ for f in $(find $LUSTRE_DIR/test/should_fail/ -type f); do
 done
 
 echo
-echo "Total: $ok / $tot"
+percent_total=$(awk "BEGIN {printf \"%.2f\n\", 100 * $ok / $tot}")
+echo "Total: $ok / $tot ($percent_total%)"
