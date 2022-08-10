@@ -181,9 +181,13 @@ pub mod merge;
 
 // Ebnf group PredefRules
 
-pub fn parse_predef_op<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(
-        PredefOp,
+fn parse_predef_op_t<'slice, 'src: 'slice, P>(
+    mut t: impl FnMut(Token) -> P,
+) -> impl FnMut(Input<'slice, 'src>) -> IResult<'slice, 'src>
+where
+    P: nom::Parser<Input<'slice, 'src>, Children, super::Error>,
+{
+    move |input| {
         alt((
             t(Not),
             t(FBy),
@@ -207,8 +211,12 @@ pub fn parse_predef_op<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
             t(Slash),
             t(Star),
             t(If),
-        )),
-    )(input)
+        ))(input)
+    }
+}
+
+pub fn parse_predef_op<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
+    node(PredefOp, parse_predef_op_t(t))(input)
 }
 
 // Ebnf group ExpressionByNamesRules

@@ -39,7 +39,7 @@ pub fn parse_id_any<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
             t(Ident),
             opt(join((
                 t_raw(DoubleColon),
-                expect(t_raw(Ident), "expected ident after colon"),
+                expect(alt((t_raw(Ident), parse_predef_op_t(t_raw))), "expected ident after colon"),
             ))),
             opt(parse_pragma),
         )),
