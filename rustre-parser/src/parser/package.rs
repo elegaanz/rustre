@@ -16,10 +16,13 @@ pub fn parse_pack_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
 pub fn parse_pack_decl_body<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
         PackageDeclBody,
-        expect(
-            many_delimited(t(Body), parse_top_level_decl, success, t(End)),
-            "missing package body (`body` ... `end`)",
-        ),
+        join((
+            t(Body),
+            expect(
+                many_delimited(success, parse_top_level_decl, success, t(End)),
+                "missing package body (`body` ... `end`)",
+            ),
+        )),
     )(input)
 }
 

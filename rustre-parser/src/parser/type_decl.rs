@@ -5,7 +5,15 @@ pub fn parse_type_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
 }
 
 pub fn parse_type_decls<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    many_delimited(success, parse_one_type_decl, success, peek_neg(t(Ident)))(input)
+    many_delimited(
+        success,
+        join((
+            parse_one_type_decl,
+            expect(t(Semicolon), "expected `;` after type declaration"),
+        )),
+        success,
+        peek_neg(t(Ident)),
+    )(input)
 }
 
 pub fn parse_one_type_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
@@ -18,7 +26,6 @@ pub fn parse_one_type_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<
                 "expected a struct/enum declaration or an existing type expression",
             ),
         ))),
-        expect(t(Semicolon), "expected `;` after type declaration"),
     ))(input)
 }
 

@@ -88,7 +88,37 @@ pub fn parse_static_arg<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
 }
 
 pub fn parse_named_static_arg<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    node(NamedStaticArgNode, t(todo!()))(input)
+    node(
+        NamedStaticArgNode,
+        alt((
+            join((t(Type), ident::parse_id_any, t(Equal), parse_type)),
+            join((
+                t(Const),
+                ident::parse_id_any,
+                t(Equal),
+                expression::parse_expression,
+            )),
+            join((
+                // TODO: unexpect `unsafe`
+                alt((t(Function), t(Node))),
+                ident::parse_id_any,
+                t(Equal),
+                parse_effective_node,
+            )),
+            join((
+                ident::parse_id_any,
+                t(Equal),
+                alt((
+                    parse_predef_op,
+                    parse_surely_node,
+                    parse_surely_type,
+                    // TODO: check if that works, normally it's a SimpleExp but I guess we can verify the
+                    //       simpleness of the expression at post-parsing time
+                    expression::parse_expression,
+                )),
+            )),
+        )),
+    )(input)
 }
 
 pub fn parse_surely_node<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {

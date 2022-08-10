@@ -18,6 +18,7 @@ pub fn parse_provide<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice
         alt((
             join((
                 t(Const),
+                expect(ident::parse_id_any, "missing const name"),
                 expect(
                     join((t(Colon), expect(parse_type, "missing type after `:`"))),
                     "type of constant must be specified explicitly",

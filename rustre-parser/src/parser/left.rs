@@ -4,8 +4,8 @@ pub fn parse_left<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
     node(
         LeftNode,
         alt((
-            many_delimited(success, parse_left_item, t(Comma), peek(t(Equal))),
             many_delimited(t(OpenPar), parse_left_item, t(Comma), t(ClosePar)),
+            many_delimited(success, parse_left_item, t(Comma), peek(t(Equal))),
         )),
     )(input)
 }
