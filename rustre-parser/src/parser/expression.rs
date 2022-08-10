@@ -115,6 +115,14 @@ pub fn parse_expression_terminal<'slice, 'src>(
     alt((
         node(ExpressionNode, parse_constant),
         expr_node(IdentExpressionNode, ident::parse_id_any),
+        expr_node(
+            MergeExpressionNode,
+            join((
+                t(Merge),
+                expect(ident::parse_id_any, "expected identifier"),
+                merge::parse_merge_cases,
+            )),
+        ),
     ))(input)
 }
 

@@ -177,6 +177,8 @@ pub mod expression;
 
 // Ebnf group MergeRules
 
+pub mod merge;
+
 // Ebnf group PredefRules
 
 pub fn parse_predef_op<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {

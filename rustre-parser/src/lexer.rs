@@ -380,7 +380,10 @@ pub enum Token {
 
     ClockExpressionNode,
 
+    MergeExpressionNode,
+
     // Ebnf group MergeRules
+    MergeCaseNode,
 
     // Ebnf group PredefRules
     PredefOp,
