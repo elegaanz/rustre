@@ -54,7 +54,10 @@ pub fn parse_node_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
             expect(ident::parse_id_any, "missing function or node name"),
             static_rules::parse_static_params,
             opt(parse_params_and_returns),
-            opt(alt((parse_node_decl_definition, parse_node_decl_alias))),
+            expect(
+                alt((parse_node_decl_alias, parse_node_decl_definition)),
+                "missing node definition, expected body or alias",
+            ),
         )),
     )(input)
 }
@@ -110,7 +113,7 @@ pub fn parse_params_and_returns<'slice, 'src>(input: Input<'slice, 'src>) -> IRe
 fn parse_node_decl_definition<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     join((
         opt(t(Semicolon)),
-        opt(nodes::parse_local_decl_list),
+        opt(parse_local_decl_list),
         body::parse_body,
         opt(alt((t(Dot), t(Semicolon)))),
     ))(input)
@@ -128,7 +131,10 @@ fn parse_node_decl_alias<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'s
     join((
         // TODO: unexpect(Semicolon), (eat semicolon but consider it a syntax error)
         t(Equal),
-        static_rules::parse_effective_node,
+        expect(
+            static_rules::parse_effective_node,
+            "missing aliased node name",
+        ),
         opt(t(Semicolon)),
     ))(input)
 }
@@ -138,7 +144,7 @@ pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
         ParamsNode,
         many_delimited(
             t(OpenPar),
-            nodes::parse_var_decl,
+            parse_var_decl,
             t(Semicolon),
             join((opt(t(Semicolon)), t(ClosePar))),
         ),
@@ -146,7 +152,7 @@ pub fn parse_params<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
 }
 
 pub fn parse_local_decl_list<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    join((parse_one_local_decl, many0(parse_one_local_decl)))(input)
+    many0(parse_one_local_decl)(input)
 }
 
 pub fn parse_one_local_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
@@ -164,7 +170,22 @@ pub fn parse_local_consts<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
 }
 
 pub fn parse_local_vars<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    many_delimited(t(Var), parse_var_decl, t(Semicolon), t(Semicolon))(input)
+    // TODO: find out why it is faster to do like this instead of directly expect(many_del...())
+    join((
+        t(Var),
+        expect(
+            many_delimited(
+                success,
+                join((
+                    expect(parse_var_decl, "malformed variable declaration"),
+                    t(Semicolon),
+                )),
+                success,
+                peek(alt((t(Const), t(Var), t(Let)))),
+            ),
+            "missing variable name",
+        ),
+    ))(input)
 }
 
 pub fn parse_var_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
