@@ -526,7 +526,7 @@ where
 
 /// Similar to [`fold_many1`], but folds right instead of left
 ///
-/// Useful for parsing right-associative expressions
+/// For parsing right-associative expressions, [`fold_many1_right_expr`] is more appropriate
 pub fn fold_many1_right<'slice, 'src: 'slice, Lang: Language, C, E, IE: RowanNomError<Lang>>(
     mut cont: impl Parser<Input<'slice, 'src, Lang>, C, IE>,
     mut end: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
@@ -545,6 +545,36 @@ where
             } else if let Ok((input, new_children)) = end.parse(input) {
                 let children = stack.into_iter().rfold(new_children, |a, b| merge(a, b));
                 break Ok((input, children));
+            } else {
+                break Err(nom::Err::Error(IE::from_message("couldn't finish fold")));
+            }
+        }
+    }
+}
+
+/// Similar to [`fold_many1`], but folds right instead of left — expression version
+///
+/// Useful for parsing right-associative expressions
+pub fn fold_many1_right_expr<'slice, 'src: 'slice, Lang: Language, C, E, IE: RowanNomError<Lang>>(
+    mut atom: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, IE>,
+    mut operator: impl Parser<Input<'slice, 'src, Lang>, (Children<Lang, E>, C), IE>,
+    mut merge: impl FnMut(Children<Lang, E>, (Children<Lang, E>, C)) -> Children<Lang, E>,
+) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, IE>
+where
+    Lang::Kind: 'static,
+{
+    move |mut input| {
+        let mut stack = Vec::new();
+
+        loop {
+            if let Ok((new_input, children)) = atom.parse(input.clone()) {
+                if let Ok((new_input, (new_children, c))) = operator.parse(new_input.clone()) {
+                    input = new_input;
+                    stack.push((children + new_children, c));
+                } else {
+                    let children = stack.into_iter().rfold(children, |a, b| merge(a, b));
+                    break Ok((new_input, children));
+                }
             } else {
                 break Err(nom::Err::Error(IE::from_message("couldn't finish fold")));
             }

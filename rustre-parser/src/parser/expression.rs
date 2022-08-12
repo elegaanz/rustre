@@ -52,18 +52,12 @@ fn parse_expression_left<'slice, 'src: 'slice>(
 /// Parses a binary right-associative chain of expression
 fn parse_expression_right<'slice, 'src: 'slice>(
     mut parse_operator: impl nom::Parser<Input<'slice, 'src>, (Children, Token), RustreParseError>,
-    mut next: impl nom::Parser<Input<'slice, 'src>, Children, RustreParseError> + Copy,
+    next: impl nom::Parser<Input<'slice, 'src>, Children, RustreParseError> + Copy,
 ) -> impl FnMut(Input<'slice, 'src>) -> IResult<'slice, 'src> {
     move |input| {
-        let next2 = next;
-
-        fold_many1_right(
-            |input| {
-                let (input, a) = next.parse(input)?;
-                let (input, (b, n)) = parse_operator.parse(input)?;
-                Ok((input, (a + b, n)))
-            },
-            next2,
+        fold_many1_right_expr(
+            next,
+            |input| parse_operator.parse(input),
             |a, (b, n)| (a + b).into_node(n).into_node(ExpressionNode),
         )(input)
     }
@@ -121,6 +115,20 @@ pub fn parse_expression_terminal<'slice, 'src>(
                 t(Merge),
                 expect(ident::parse_id_any, "expected identifier"),
                 merge::parse_merge_cases,
+            )),
+        ),
+        // TODO handle `with` separately
+        expr_node(
+            IfExpressionNode,
+            // TODO check associativity compliance of `if then else`
+            // TODO laxism
+            join((
+                alt((t(If), t(With))),
+                parse_expression,
+                t(Then),
+                parse_expression,
+                t(Else),
+                parse_expression,
             )),
         ),
     ))(input)
@@ -296,22 +304,7 @@ pub fn parse_expression_19<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<
 }
 
 pub fn parse_expression_20<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    alt((
-        // TODO handle `with` separately
-        expr_node(
-            IfExpressionNode,
-            // TODO check associativity compliance of `if then else`
-            join((
-                alt((t(If), t(With))),
-                parse_expression_20,
-                t(Then),
-                parse_expression_20,
-                t(Else),
-                parse_expression_20,
-            )),
-        ),
-        parse_expression_19,
-    ))(input)
+    parse_expression_19(input)
 }
 
 pub fn parse_expression<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {

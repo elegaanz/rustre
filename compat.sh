@@ -21,6 +21,7 @@ echo
 
 for f in $(find $LUSTRE_DIR/test/should_work/ -type f); do
     ((tot=$tot+1))
+    echo -en "[RUNN] $f\r"
     $BIN_PATH $f &> /dev/null
     if [ $? -eq 0 ]; then
         echo "[ OK ] $f"
@@ -35,6 +36,7 @@ echo "=== Should fail ==="
 echo
 #Pour chaque test faudrait aussi faire une version où on rajoute du trivia entre tous les lexèmes non-trivia pour vérifier qu'on gère bien ça. Et à la limite un autre où on enlève le trivia qui pourrait être là (quitte à avoir une liste de lexèmes qui ne peuvent plus être serialisée vu que des idents ou kw peuvent se toucher)
 for f in $(find $LUSTRE_DIR/test/should_fail/ -type f); do
+    echo -en "[RUNN] $f\r"
     $BIN_PATH $f &> /dev/null
     ((tot=$tot+1))
     if [ $? -eq 0 ]; then
