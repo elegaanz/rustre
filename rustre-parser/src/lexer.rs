@@ -169,7 +169,7 @@ pub enum Token {
     #[token("fby")]
     FBy,
 
-    #[regex(r"[0-9]+\.[0-9]+")] // TODO: this is incorrect
+    #[regex(r"[0-9]+\.[0-9]*")] // TODO: this is incorrect
     RConst,
 
     #[token("real")]
@@ -389,6 +389,8 @@ pub enum Token {
     PredefOp,
 
     // Ebnf group ExpressionByNamesRules
+    CallByNameExpressionNode,
+    CallByNameParamNode,
 
     // Ebnf group ConstantRules
     ConstantNode,

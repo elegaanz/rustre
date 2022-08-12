@@ -221,6 +221,8 @@ pub fn parse_predef_op<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
 
 // Ebnf group ExpressionByNamesRules
 
+pub mod expression_by_names;
+
 // Ebnf group ConstantRules
 
 pub fn parse_constant<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {

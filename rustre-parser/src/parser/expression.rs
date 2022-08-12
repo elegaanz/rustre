@@ -108,6 +108,7 @@ pub fn parse_expression_terminal<'slice, 'src>(
 ) -> IResult<'slice, 'src> {
     alt((
         node(ExpressionNode, parse_constant),
+        expression_by_names::parse_call_by_name_expression,
         expr_node(IdentExpressionNode, ident::parse_id_any),
         expr_node(
             MergeExpressionNode,
