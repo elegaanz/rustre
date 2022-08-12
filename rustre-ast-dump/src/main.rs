@@ -6,7 +6,13 @@ use rustre_parser::{lexer::Token, Parse, SyntaxNode, SyntaxToken};
 
 fn main() -> Result<(), u8> {
     let file = std::env::args().nth(1).expect("please give a file name");
-    let contents = std::fs::read_to_string(&file).unwrap();
+    let mut contents = std::fs::read_to_string(&file).unwrap();
+
+    // Remove when comments as last tokens are properly parsed
+    if !contents.ends_with('\n') {
+        contents += "\n";
+    }
+
     let Parse { root, errors } = rustre_parser::Parse::parse(&contents);
     print(0, root.into());
 
