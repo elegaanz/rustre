@@ -5,7 +5,7 @@ mod rowan_nom;
 
 use std::ops::Range;
 
-use crate::lexer::Token;
+use crate::lexer::{LexerExpansionExt, Token};
 use crate::rowan_nom::RowanNomError;
 use lexer::LustreLang;
 use logos::Logos;
@@ -63,7 +63,7 @@ pub struct Parse {
 
 impl Parse {
     pub fn parse(src: &str) -> Self {
-        let lexer = lexer::Token::lexer(src).spanned();
+        let lexer = Token::lexer(src).spanned().expanded();
         let tokens: Vec<_> = lexer.map(|(tok, span)| (tok, &src[span])).collect();
         let input = rowan_nom::Input::from(tokens.as_slice());
         let (_, (root, errors)) = parser::parse_program(input).expect("TODO");

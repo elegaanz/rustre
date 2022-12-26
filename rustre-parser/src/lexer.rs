@@ -1,4 +1,4 @@
-use logos::Logos;
+use logos::{Lexer, Logos, SpannedIter};
 
 #[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
 /// A token
@@ -94,6 +94,19 @@ pub enum Token {
     #[regex(r"\d+")]
     IConst,
 
+    /// A very special case to handle an [IConst][Token::IConst] directly followed by a `..`
+    /// ([CDots][Token::CDots]) operator.
+    ///
+    /// This specialization is important to be able to parse [RConst][Token::RConst] properly, or
+    /// else `1..2` would be parsed as `1.` `.` `2` which is a syntax error and not what's supposed
+    /// to be parsed in the first place.
+    ///
+    /// This weird trick of treating two tokens as one could be avoided if [`logos`] supported
+    /// regex lookaheads, so [RConst][Token::RConst] could reject a list of digits followed by 2
+    /// dots.
+    #[regex(r"\d+\.\.", priority = 11)]
+    IConstAndCDots,
+
     #[regex("[a-zA-Z_][a-zA-Z0-9_]*")] // TODO: check
     Ident,
 
@@ -169,7 +182,7 @@ pub enum Token {
     #[token("fby")]
     FBy,
 
-    #[regex(r"[0-9]+\.[0-9]*")] // TODO: this is incorrect
+    #[regex(r"\d+\.\d*")]
     RConst,
 
     #[token("real")]
@@ -396,6 +409,44 @@ pub enum Token {
     ConstantNode,
 }
 
+pub trait LexerExpansionExt: Iterator + Sized {
+    type ExpandedLexerItem: Iterator<Item = Self::Item>;
+
+    fn expand_one(item: Self::Item) -> Self::ExpandedLexerItem;
+    fn expanded(
+        self,
+    ) -> std::iter::FlatMap<Self, Self::ExpandedLexerItem, fn(Self::Item) -> Self::ExpandedLexerItem>
+    {
+        self.flat_map(Self::expand_one)
+    }
+}
+
+impl<'source> LexerExpansionExt for Lexer<'source, Token> {
+    type ExpandedLexerItem = std::iter::Take<std::array::IntoIter<Self::Item, 2>>;
+
+    fn expand_one(item: Self::Item) -> Self::ExpandedLexerItem {
+        match item {
+            Token::IConstAndCDots => [Token::IConst, Token::CDots].into_iter().take(2),
+            other => [other, Token::Error].into_iter().take(1),
+        }
+    }
+}
+
+impl<'source> LexerExpansionExt for SpannedIter<'source, Token> {
+    type ExpandedLexerItem = std::iter::Take<std::array::IntoIter<Self::Item, 2>>;
+
+    fn expand_one(item: Self::Item) -> Self::ExpandedLexerItem {
+        match item {
+            (Token::IConstAndCDots, span) => {
+                let i_const = (Token::IConst, span.start..span.end - 2);
+                let c_dots = (Token::CDots, span.end - 2..span.end);
+                [i_const, c_dots].into_iter().take(2)
+            }
+            other => [other, (Token::Error, 0..0)].into_iter().take(1),
+        }
+    }
+}
+
 impl From<Token> for rowan::SyntaxKind {
     fn from(tok: Token) -> Self {
         Self(tok as u16)
@@ -587,8 +638,25 @@ mod tests {
             vec![
                 Token::Ident,
                 Token::OpenBracket,
+                Token::IConstAndCDots,
                 Token::IConst,
-                Token::CDots,
+                Token::CloseBracket,
+            ],
+        )
+    }
+
+    #[test]
+    fn test_const_slice_and_step() {
+        test_lexer(
+            "a[1..2 step 2]",
+            vec![
+                Token::Ident,
+                Token::OpenBracket,
+                Token::IConstAndCDots,
+                Token::IConst,
+                Token::Space,
+                Token::Step,
+                Token::Space,
                 Token::IConst,
                 Token::CloseBracket,
             ],

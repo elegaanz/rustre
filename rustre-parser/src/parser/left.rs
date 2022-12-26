@@ -18,14 +18,15 @@ pub fn parse_left_item<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
                 (c, LeftFieldAccessNode)
             }),
             map(
-                join((
+                many_delimited(
                     t(OpenBracket),
                     expect(
-                        alt((expression::parse_expression, parse_select)),
+                        alt((parse_select, expression::parse_expression)),
                         "expected expression or select",
                     ),
+                    eof,
                     t(CloseBracket),
-                )),
+                ),
                 |c| (c, LeftTableAccessNode),
             ),
         )),
