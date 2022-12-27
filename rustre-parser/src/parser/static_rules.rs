@@ -77,7 +77,7 @@ pub fn parse_static_arg<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
                 alt((t(Node), t(Function))),
                 expect(parse_effective_node, "expected node"),
             )),
-            parse_predef_op,
+            join((parse_predef_op, peek(alt((t(Comma), t(Semicolon)))))),
             parse_surely_node,
             parse_surely_type,
             // TODO: check if that works, normally it's a SimpleExp but I guess we can verify the
