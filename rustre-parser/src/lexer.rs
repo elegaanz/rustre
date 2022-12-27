@@ -185,7 +185,11 @@ pub enum Token {
     #[token("fby")]
     FBy,
 
-    #[regex(r"\d+\.\d*")]
+    /// Recognizes a floating-point literal
+    ///
+    /// The regex is intentionally a bit greedy, but this gives room for better errors if the value
+    /// is unparseable.
+    #[regex(r"\d+\.\d*(e[+-]?\d+)?")]
     RConst,
 
     #[token("real")]
