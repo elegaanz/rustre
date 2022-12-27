@@ -1,6 +1,7 @@
+use enum_ordinalize::Ordinalize;
 use logos::{Lexer, Logos, SpannedIter};
 
-#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone)]
+#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone, Ordinalize)]
 /// A token
 #[repr(u16)]
 pub enum Token {
@@ -466,11 +467,11 @@ impl rowan::Language for LustreLang {
     type Kind = Token;
 
     fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
-        unsafe { std::mem::transmute::<u16, Token>(raw.0) }
+        Token::from_ordinal(raw.0).unwrap()
     }
 
     fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
-        kind.into()
+        rowan::SyntaxKind(kind.ordinal())
     }
 }
 
