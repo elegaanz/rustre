@@ -13,6 +13,9 @@ nom = "7.1.1"
 rowan = "0.15.5"
 thiserror = "1.0"
 
+[dev-dependencies]
+rustre-parser-tests-codegen = { path = "../rustre-parser-tests-codegen" }
+
 [build-dependencies]
 ungrammar = "1.16"
 case = "1.0.0"

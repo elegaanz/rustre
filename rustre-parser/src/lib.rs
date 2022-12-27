@@ -70,3 +70,7 @@ impl Parse {
         Self { root, errors }
     }
 }
+
+// TODO: Make these tests opt-in (as well as the rustre_parser_tests_codegen dep)
+#[cfg(test)]
+rustre_parser_tests_codegen::include_lustre_tests!(mod parser_tests);

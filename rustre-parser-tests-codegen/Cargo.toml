@@ -1,0 +1,14 @@
+[package]
+name = "rustre-parser-tests-codegen"
+description = "rustre-parser module that generates test cases for each test file in the upstream lustre-v6 repository"
+version = "0.0.0" # doesn't need incrementing
+edition = "2021"
+license = "GPL-3.0"
+
+[lib]
+proc-macro = true
+path = "lib.rs"
+
+[dependencies]
+proc-macro2 = "1.0"
+quote = "1.0"
