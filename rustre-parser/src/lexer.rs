@@ -4,7 +4,10 @@ use logos::{Lexer, Logos, SpannedIter};
 /// A token
 #[repr(u16)]
 pub enum Token {
-    #[regex("[ \t\n\r]")]
+    /// Whitespace character
+    ///
+    /// Includes: spaces, tabs, newlines, carriage returns, form feeds
+    #[regex("[ \t\n\r\u{0C}]")]
     Space,
 
     #[token("extern")]
