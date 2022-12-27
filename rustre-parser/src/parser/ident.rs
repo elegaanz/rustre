@@ -11,13 +11,26 @@ pub fn parse_lv6_id_ref<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
 }
 
 pub fn parse_lv6_id<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    join((parse_lv6_id_ref, opt(parse_pragma)))(input)
+    many_delimited(
+        parse_lv6_id_ref,
+        parse_pragma,
+        peek(t(Percent)),
+        peek_neg(t(Percent)),
+    )(input)
 }
 
 pub fn parse_pragma<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
         PragmaNode,
-        join((t(Percent), t(Ident), t(Colon), t(Ident), t(Percent))),
+        many_delimited(
+            t(Percent),
+            expect(
+                join((t(Ident), t(Colon), t(Ident))),
+                "expected ident:ident inside pragma",
+            ),
+            eof,
+            t(Percent),
+        ),
     )(input)
 }
 
@@ -35,13 +48,17 @@ pub fn parse_pragma<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice,
 pub fn parse_id_any<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
         IdNode,
-        join((
-            t(Ident),
-            opt(join((
-                t_raw(DoubleColon),
-                expect(alt((t_raw(Ident), parse_predef_op_t(t_raw))), "expected ident after colon"),
-            ))),
-            opt(parse_pragma),
-        )),
+        many_delimited(
+            join((
+                t(Ident),
+                opt(join((
+                    t_raw(DoubleColon),
+                    expect(alt((t_raw(Ident), parse_predef_op_t(t_raw))), "expected ident after colon"),
+                ))),
+            )),
+            parse_pragma,
+            success,
+            peek_neg(t(Percent)),
+        )
     )(input)
 }
