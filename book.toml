@@ -1,0 +1,6 @@
+[book]
+authors = ["Ana Gelez"]
+language = "en"
+multilingual = false
+src = "src"
+title = "Rustre"
