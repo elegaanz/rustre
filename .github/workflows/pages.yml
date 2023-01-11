@@ -4,11 +4,23 @@ on:
   push:
     branches:
       - docs
-  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: true
 
 jobs:
   deploy:
     runs-on: ubuntu-20.04
+    environment:
+      name: docs
+      url: ${{ steps.deployment.outputs.page_url }}
     concurrency:
       group: ${{ github.workflow }}-${{ github.ref }}
     steps:
@@ -21,9 +33,12 @@ jobs:
 
       - run: mdbook build
 
-      - name: Deploy
-        uses: peaceiris/actions-gh-pages@v3
-        if: ${{ github.ref == 'refs/heads/docs' }}
+      - name: Setup Pages
+        uses: actions/configure-pages@v2
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v1
         with:
-          github_token: ${{ secrets.GH_TOKEN }}
-          publish_dir: ./book
+          path: './book'
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v1          
