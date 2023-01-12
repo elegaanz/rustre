@@ -7,7 +7,7 @@
 
 - [Architecture classique d'un compilateur](architecture/classic.md)
 - [Vue d'ensemble](architecture/overview.md)
-- [Lexeur (logos)]()
+- [Lexeur (logos)](architecture/logos.md)
 - [Parseur (rowan + nom + ungrammar)]()
 - [Queries (salsa)]()
 

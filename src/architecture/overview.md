@@ -176,6 +176,10 @@ Le système fonctionne donc « à l'envers » : on lance la query « génère du
 qui va demander à exécuter les passes précendentes, en remontant jusqu'aux premières passes
 (« construit un arbre de syntaxe pour tel fichier »).
 
+Pour certaines queries, il est intéressant d'écrire leur cache sur le disque
+en plus de la mémoire, pour pouvoir les réutiliser la prochaine fois que le
+compilateur est lancé.
+
 ## Avantages de cette architecture
 
 On peut reconstruire facilement une petite partie de l'arbre de syntaxe (utile
@@ -196,6 +200,10 @@ des représentations intermédiaires.
 Lustre ayant des sorties variées (extended code, binaire, C, etc.), le système de queries
 est particulièrement adapté. On définit une query par type de sortie, et on les laisse
 définir leur dépendances, sans avoir à redéfinir toute la suite de passes à chaque fois.
+
+Lustre étant un langage pur, on peut définir une query d'interprétation d'un nœud/fonction
+et mettre ses résultats en cache, pour créer un interpréteur intégré au compilateur qui
+soit efficace.
 
 [logos]: https://crates.io/crates/logos
 [rowan]: https://crates.io/crates/rowan

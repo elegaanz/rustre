@@ -4,3 +4,6 @@ language = "en"
 multilingual = false
 src = "src"
 title = "Rustre"
+
+[preprocessor.git-links]
+command = 'python gitlinks.py'
