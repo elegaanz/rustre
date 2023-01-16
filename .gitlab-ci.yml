@@ -1,0 +1,11 @@
+image: peaceiris/mdbook:latest
+
+pages:
+    script:
+    - mdbook build
+    artifacts:
+        paths:
+        - book
+    only:
+        variables:
+        - $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
