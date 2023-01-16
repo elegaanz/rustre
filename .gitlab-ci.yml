@@ -2,10 +2,10 @@ image: peaceiris/mdbook:latest
 
 pages:
     script:
-    - mdbook build
+    - mdbook build --d public
     artifacts:
         paths:
-        - book
+        - public
     only:
         variables:
         - $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
