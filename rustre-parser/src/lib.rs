@@ -27,6 +27,22 @@ impl RowanNomError<LustreLang> for Error {
         }
     }
 
+    fn from_expected(position: usize, message: &str) -> Self {
+        Self {
+            span: position..position,
+            msg: message.to_string(),
+            cause: None,
+        }
+    }
+
+    fn from_expected_eof(range: Range<usize>) -> Self {
+        Self {
+            span: range,
+            msg: "expected eof, found token".to_string(),
+            cause: None,
+        }
+    }
+
     fn from_unexpected_eof(position: usize) -> Self {
         Error {
             span: position..position,

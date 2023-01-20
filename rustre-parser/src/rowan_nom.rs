@@ -158,8 +158,12 @@ pub fn success<'slice, 'src: 'slice, Lang: Language, E, IE>(
 pub fn eof<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
     input: Input<'slice, 'src, Lang>,
 ) -> IResult<'slice, 'src, Lang, E, IE> {
-    if input.tokens.is_empty() {
-        let trivia_tokens = input.trivia_tokens.into_iter();
+    if let Some((_, (_trivia, unexpected_token))) = input.next() {
+        let start = input.src_pos;
+        let range = start..start + unexpected_token.1.len();
+        Err(nom::Err::Error(IE::from_expected_eof(range)))
+    } else {
+        let trivia_tokens = input.trivia_tokens.iter();
 
         let input = Input {
             src_pos: input.src_pos + input.trivia_tokens_text_len,
@@ -169,10 +173,6 @@ pub fn eof<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
         };
 
         Ok((input, trivia_tokens.collect()))
-    } else {
-        Err(nom::Err::Error(IE::from_message(
-            "expected eof, found token",
-        )))
     }
 }
 
@@ -204,6 +204,8 @@ pub fn t<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
     );
 
     move |input| {
+        let input_src_pos = input.src_pos;
+
         if let Some((new_input, (trivia, current_token))) = input.next() {
             if current_token.0 == token {
                 Ok((
@@ -214,7 +216,12 @@ pub fn t<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
                         .collect(),
                 ))
             } else {
-                Err(nom::Err::Error(IE::from_message("unexpected token")))
+                let range = input_src_pos..input_src_pos + current_token.1.len();
+                Err(nom::Err::Error(IE::from_unexpected_token(
+                    range,
+                    token,
+                    current_token.0,
+                )))
             }
         } else {
             Err(nom::Err::Error(IE::from_unexpected_eof(input.src_pos)))
@@ -240,7 +247,12 @@ pub fn t_raw<'slice, 'src: 'slice, Lang: Language, E, IE: RowanNomError<Lang>>(
                 if current_token.0 == token {
                     Ok((new_input, std::iter::once(current_token).collect()))
                 } else {
-                    Err(nom::Err::Error(IE::from_message("unexpected token")))
+                    let range = input_src_pos..input_src_pos + current_token.1.len();
+                    Err(nom::Err::Error(IE::from_unexpected_token(
+                        range,
+                        token,
+                        current_token.0,
+                    )))
                 }
             } else {
                 Err(nom::Err::Error(IE::from_unexpected_eof(input_src_pos)))
@@ -301,13 +313,22 @@ where
 }
 
 pub fn expect<'slice, 'src: 'slice, Lang: Language, E: RowanNomError<Lang>>(
-    parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, E>,
+    mut parser: impl Parser<Input<'slice, 'src, Lang>, Children<Lang, E>, E>,
     message: &'static str,
 ) -> impl FnMut(Input<'slice, 'src, Lang>) -> IResult<'slice, 'src, Lang, E, E>
 where
     Lang::Kind: 'static,
 {
-    fallible_with(parser, move |e| e.with_context(message))
+    move |input| {
+        let src_pos = input.src_pos;
+        parser.parse(input.clone()).or_else(move |e| match e {
+            nom::Err::Error(_) => Ok((
+                input,
+                Children::from_err(E::from_expected(src_pos, message)),
+            )),
+            other => Err(other),
+        })
+    }
 }
 
 pub fn fallible<'slice, 'src: 'slice, Lang: Language, E, IE>(

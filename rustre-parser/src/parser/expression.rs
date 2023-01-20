@@ -338,8 +338,11 @@ fn parse_call_par<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
 fn parse_array_brackets<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     join((
         t(OpenBracket),
-        alt((left::parse_select, parse_expression)),
-        t(CloseBracket),
+        expect(
+            alt((left::parse_select, parse_expression)),
+            "expected expression",
+        ),
+        expect(t(CloseBracket), "expected closing square bracket"),
     ))(input)
 }
 

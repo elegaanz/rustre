@@ -4,6 +4,10 @@ pub trait RowanNomError<Lang: super::Language> {
     /// Generic error, should probably be ultimately removed
     fn from_message(message: &str) -> Self;
 
+    fn from_expected(position: usize, message: &str) -> Self;
+
+    fn from_expected_eof(range: Range<usize>) -> Self;
+
     /// Creates error: Attempted to read a token when there are none remaining
     fn from_unexpected_eof(position: usize) -> Self;
 
@@ -21,6 +25,14 @@ pub struct DummyError;
 
 impl<Lang: super::Language> RowanNomError<Lang> for DummyError {
     fn from_message(_message: &str) -> Self {
+        Self
+    }
+
+    fn from_expected(_position: usize, _message: &str) -> Self {
+        Self
+    }
+
+    fn from_expected_eof(_range: Range<usize>) -> Self {
         Self
     }
 
