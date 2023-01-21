@@ -2,7 +2,8 @@ use std::ops::Range;
 
 use ariadne::{Label, Report, ReportKind, Span};
 use rowan::NodeOrToken;
-use rustre_parser::{lexer::Token, Parse, SyntaxNode, SyntaxToken};
+use rustre_parser::ast::AstNode;
+use rustre_parser::{lexer::Token, SyntaxNode, SyntaxToken};
 
 fn main() -> Result<(), u8> {
     let file = std::env::args().nth(1).expect("please give a file name");
@@ -13,8 +14,8 @@ fn main() -> Result<(), u8> {
         contents += "\n";
     }
 
-    let Parse { root, errors } = rustre_parser::Parse::parse(&contents);
-    print(0, root.into());
+    let (root, errors) = rustre_parser::parse(&contents);
+    print(0, NodeOrToken::Node(root.syntax().clone()));
 
     let no_errors = errors.is_empty();
 

@@ -4,21 +4,20 @@
 // For instance, in the actual grammar, it is mandatory that either PackageBody or
 // PackageList are present, but we want to consider them as optional properties
 // to generate two getters that return an Option<_>
-Root = IncludeStatement* PackageBody? PackageList?
+Root = IncludeStatement*
 
 IncludeStatement = 'include' 'str'
 
-PackageList = ModelDecl* PackageDecl* PackageAlias*
-ModelDecl = 'model' // TODO
-PackageDecl = 'package' // TODO
-PackageAlias = 'package' // TODO
+ModelDeclNode = 'model' // TODO
+PackageDeclNode = 'package' // TODO
+PackageAliasNode = 'package' // TODO
 
-PackageBody = OneDecl*
+PackageDeclBody = OneDecl*
 
-OneDecl = ConstantDecl | TypeDecl | NodeDecl
+OneDecl = ConstantDeclNode | TypeDeclNode | NodeNode
 
-NodeDecl = 'extern'? 'unsafe'? 'node'? 'function'? // TODO
+NodeNode = 'extern'? 'unsafe'? 'node'? 'function'? // TODO
 
-ConstantDecl = 'const' // TODO
+ConstantDeclNode = 'const' // TODO
 
-TypeDecl = 'type'
+TypeDeclNode = 'type'

@@ -42,12 +42,6 @@ impl Root {
     pub fn all_include_statement(&self) -> impl Iterator<Item = IncludeStatement> {
         self.syntax().children().filter_map(IncludeStatement::cast)
     }
-    pub fn package_body(&self) -> Option<PackageBody> {
-        self.syntax().children().find_map(PackageBody::cast)
-    }
-    pub fn package_list(&self) -> Option<PackageList> {
-        self.syntax().children().find_map(PackageList::cast)
-    }
 }
 
 // IncludeStatement
@@ -78,16 +72,16 @@ impl AstNode for IncludeStatement {
     }
 }
 
-// PackageBody
+// ModelDeclNode
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageBody {
+pub struct ModelDeclNode {
     pub(crate) syntax: SyntaxNode,
 }
 
-impl AstNode for PackageBody {
+impl AstNode for ModelDeclNode {
     fn can_cast(kind: Token) -> bool {
-        kind == Token::PackageBody
+        kind == Token::ModelDeclNode
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -102,137 +96,97 @@ impl AstNode for PackageBody {
         &self.syntax
     }
     fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to PackageBody")
+        Self::cast(syntax).expect("Failed to cast to ModelDeclNode")
     }
 }
 
-impl PackageBody {
+// PackageDeclNode
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PackageDeclNode {
+    pub(crate) syntax: SyntaxNode,
+}
+
+impl AstNode for PackageDeclNode {
+    fn can_cast(kind: Token) -> bool {
+        kind == Token::PackageDeclNode
+    }
+
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn expect(syntax: SyntaxNode) -> Self {
+        Self::cast(syntax).expect("Failed to cast to PackageDeclNode")
+    }
+}
+
+// PackageAliasNode
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PackageAliasNode {
+    pub(crate) syntax: SyntaxNode,
+}
+
+impl AstNode for PackageAliasNode {
+    fn can_cast(kind: Token) -> bool {
+        kind == Token::PackageAliasNode
+    }
+
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn expect(syntax: SyntaxNode) -> Self {
+        Self::cast(syntax).expect("Failed to cast to PackageAliasNode")
+    }
+}
+
+// PackageDeclBody
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PackageDeclBody {
+    pub(crate) syntax: SyntaxNode,
+}
+
+impl AstNode for PackageDeclBody {
+    fn can_cast(kind: Token) -> bool {
+        kind == Token::PackageDeclBody
+    }
+
+    fn cast(syntax: SyntaxNode) -> Option<Self> {
+        if Self::can_cast(syntax.kind()) {
+            Some(Self { syntax })
+        } else {
+            None
+        }
+    }
+
+    fn syntax(&self) -> &SyntaxNode {
+        &self.syntax
+    }
+    fn expect(syntax: SyntaxNode) -> Self {
+        Self::cast(syntax).expect("Failed to cast to PackageDeclBody")
+    }
+}
+
+impl PackageDeclBody {
     pub fn all_one_decl(&self) -> impl Iterator<Item = OneDecl> {
         self.syntax().children().filter_map(OneDecl::cast)
-    }
-}
-
-// PackageList
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageList {
-    pub(crate) syntax: SyntaxNode,
-}
-
-impl AstNode for PackageList {
-    fn can_cast(kind: Token) -> bool {
-        kind == Token::PackageList
-    }
-
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        if Self::can_cast(syntax.kind()) {
-            Some(Self { syntax })
-        } else {
-            None
-        }
-    }
-
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-    fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to PackageList")
-    }
-}
-
-impl PackageList {
-    pub fn all_model_decl(&self) -> impl Iterator<Item = ModelDecl> {
-        self.syntax().children().filter_map(ModelDecl::cast)
-    }
-    pub fn all_package_decl(&self) -> impl Iterator<Item = PackageDecl> {
-        self.syntax().children().filter_map(PackageDecl::cast)
-    }
-    pub fn all_package_alias(&self) -> impl Iterator<Item = PackageAlias> {
-        self.syntax().children().filter_map(PackageAlias::cast)
-    }
-}
-
-// ModelDecl
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ModelDecl {
-    pub(crate) syntax: SyntaxNode,
-}
-
-impl AstNode for ModelDecl {
-    fn can_cast(kind: Token) -> bool {
-        kind == Token::ModelDecl
-    }
-
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        if Self::can_cast(syntax.kind()) {
-            Some(Self { syntax })
-        } else {
-            None
-        }
-    }
-
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-    fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to ModelDecl")
-    }
-}
-
-// PackageDecl
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageDecl {
-    pub(crate) syntax: SyntaxNode,
-}
-
-impl AstNode for PackageDecl {
-    fn can_cast(kind: Token) -> bool {
-        kind == Token::PackageDecl
-    }
-
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        if Self::can_cast(syntax.kind()) {
-            Some(Self { syntax })
-        } else {
-            None
-        }
-    }
-
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-    fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to PackageDecl")
-    }
-}
-
-// PackageAlias
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PackageAlias {
-    pub(crate) syntax: SyntaxNode,
-}
-
-impl AstNode for PackageAlias {
-    fn can_cast(kind: Token) -> bool {
-        kind == Token::PackageAlias
-    }
-
-    fn cast(syntax: SyntaxNode) -> Option<Self> {
-        if Self::can_cast(syntax.kind()) {
-            Some(Self { syntax })
-        } else {
-            None
-        }
-    }
-
-    fn syntax(&self) -> &SyntaxNode {
-        &self.syntax
-    }
-    fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to PackageAlias")
     }
 }
 
@@ -240,26 +194,26 @@ impl AstNode for PackageAlias {
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum OneDecl {
-    ConstantDecl(ConstantDecl),
-    TypeDecl(TypeDecl),
-    NodeDecl(NodeDecl),
+    ConstantDeclNode(ConstantDeclNode),
+    TypeDeclNode(TypeDeclNode),
+    NodeNode(NodeNode),
 }
 impl AstNode for OneDecl {
     fn can_cast(kind: Token) -> bool {
-        ConstantDecl::can_cast(kind) || TypeDecl::can_cast(kind) || NodeDecl::can_cast(kind)
+        ConstantDeclNode::can_cast(kind) || TypeDeclNode::can_cast(kind) || NodeNode::can_cast(kind)
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self> {
-        ConstantDecl::cast(syntax.clone()).map(Self::ConstantDecl)
-            .or_else(|| TypeDecl::cast(syntax.clone()).map(Self::TypeDecl))
-            .or_else(|| NodeDecl::cast(syntax.clone()).map(Self::NodeDecl))
+        ConstantDeclNode::cast(syntax.clone()).map(Self::ConstantDeclNode)
+            .or_else(|| TypeDeclNode::cast(syntax.clone()).map(Self::TypeDeclNode))
+            .or_else(|| NodeNode::cast(syntax.clone()).map(Self::NodeNode))
     }
 
     fn syntax(&self) -> &SyntaxNode {
         match self {
-            Self::ConstantDecl(x) => x.syntax(),
-            Self::TypeDecl(x) => x.syntax(),
-            Self::NodeDecl(x) => x.syntax(),
+            Self::ConstantDeclNode(x) => x.syntax(),
+            Self::TypeDeclNode(x) => x.syntax(),
+            Self::NodeNode(x) => x.syntax(),
         }
     }
     fn expect(syntax: SyntaxNode) -> Self {
@@ -268,36 +222,36 @@ impl AstNode for OneDecl {
 }
 
 impl OneDecl {
-    pub fn is_constant_decl(&self) -> bool {
-        if let OneDecl::ConstantDecl(_) = *self { true } else { false }
+    pub fn is_constant_decl_node(&self) -> bool {
+        if let OneDecl::ConstantDeclNode(_) = *self { true } else { false }
     }
-    pub fn unwrap_constant_decl(self) -> ConstantDecl {
-        if let OneDecl::ConstantDecl(data) = self { data } else { panic!("Failed to unwrap OneDecl as ConstantDecl") }
+    pub fn unwrap_constant_decl_node(self) -> ConstantDeclNode {
+        if let OneDecl::ConstantDeclNode(data) = self { data } else { panic!("Failed to unwrap OneDecl as ConstantDeclNode") }
     }
-    pub fn is_type_decl(&self) -> bool {
-        if let OneDecl::TypeDecl(_) = *self { true } else { false }
+    pub fn is_type_decl_node(&self) -> bool {
+        if let OneDecl::TypeDeclNode(_) = *self { true } else { false }
     }
-    pub fn unwrap_type_decl(self) -> TypeDecl {
-        if let OneDecl::TypeDecl(data) = self { data } else { panic!("Failed to unwrap OneDecl as TypeDecl") }
+    pub fn unwrap_type_decl_node(self) -> TypeDeclNode {
+        if let OneDecl::TypeDeclNode(data) = self { data } else { panic!("Failed to unwrap OneDecl as TypeDeclNode") }
     }
-    pub fn is_node_decl(&self) -> bool {
-        if let OneDecl::NodeDecl(_) = *self { true } else { false }
+    pub fn is_node_node(&self) -> bool {
+        if let OneDecl::NodeNode(_) = *self { true } else { false }
     }
-    pub fn unwrap_node_decl(self) -> NodeDecl {
-        if let OneDecl::NodeDecl(data) = self { data } else { panic!("Failed to unwrap OneDecl as NodeDecl") }
+    pub fn unwrap_node_node(self) -> NodeNode {
+        if let OneDecl::NodeNode(data) = self { data } else { panic!("Failed to unwrap OneDecl as NodeNode") }
     }
 }
 
-// ConstantDecl
+// ConstantDeclNode
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ConstantDecl {
+pub struct ConstantDeclNode {
     pub(crate) syntax: SyntaxNode,
 }
 
-impl AstNode for ConstantDecl {
+impl AstNode for ConstantDeclNode {
     fn can_cast(kind: Token) -> bool {
-        kind == Token::ConstantDecl
+        kind == Token::ConstantDeclNode
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -312,20 +266,20 @@ impl AstNode for ConstantDecl {
         &self.syntax
     }
     fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to ConstantDecl")
+        Self::cast(syntax).expect("Failed to cast to ConstantDeclNode")
     }
 }
 
-// TypeDecl
+// TypeDeclNode
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct TypeDecl {
+pub struct TypeDeclNode {
     pub(crate) syntax: SyntaxNode,
 }
 
-impl AstNode for TypeDecl {
+impl AstNode for TypeDeclNode {
     fn can_cast(kind: Token) -> bool {
-        kind == Token::TypeDecl
+        kind == Token::TypeDeclNode
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -340,20 +294,20 @@ impl AstNode for TypeDecl {
         &self.syntax
     }
     fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to TypeDecl")
+        Self::cast(syntax).expect("Failed to cast to TypeDeclNode")
     }
 }
 
-// NodeDecl
+// NodeNode
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct NodeDecl {
+pub struct NodeNode {
     pub(crate) syntax: SyntaxNode,
 }
 
-impl AstNode for NodeDecl {
+impl AstNode for NodeNode {
     fn can_cast(kind: Token) -> bool {
-        kind == Token::NodeDecl
+        kind == Token::NodeNode
     }
 
     fn cast(syntax: SyntaxNode) -> Option<Self> {
@@ -368,11 +322,11 @@ impl AstNode for NodeDecl {
         &self.syntax
     }
     fn expect(syntax: SyntaxNode) -> Self {
-        Self::cast(syntax).expect("Failed to cast to NodeDecl")
+        Self::cast(syntax).expect("Failed to cast to NodeNode")
     }
 }
 
-impl NodeDecl {
+impl NodeNode {
     pub fn is_extern(&self) -> bool {
         self.syntax().children_with_tokens().filter_map(|it| it.into_token()).any(|s| Extern::cast(s).is_some())
     }

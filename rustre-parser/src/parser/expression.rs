@@ -1,6 +1,6 @@
 //! Expression-related parsers
 //!
-//! https://www-verimag.imag.fr/DIST-TOOLS/SYNCHRONE/lustre-v6/doc/lv6-ref-man.pdf#section.2.10
+//! <https://www-verimag.imag.fr/DIST-TOOLS/SYNCHRONE/lustre-v6/doc/lv6-ref-man.pdf#section.2.10>
 
 use super::*;
 

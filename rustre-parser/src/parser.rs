@@ -1,15 +1,31 @@
-use super::Error as RustreParseError;
+//! Individual parsers for Lustre's grammar
+//!
+//! If you want to parse an entire program, you'll mostly use [`parse_program`]. However, this
+//! module gives you access to finer parsers, in case you need to build the syntax tree of a very
+//! specific element. Most parsers in this file are grouped in submodules [according to the same
+//! "Ebnf groups" that appear in the official specification][spec]. There is however no guarantee
+//! that all parsers here map 1:1 to a parsing rule from the specification.
+//!
+//! # Errors
+//!
+//! While parsing an entire program isn't supposed to make the actual parser fail, if you go about
+//! parsing individual syntax elements using a parser from this module, their parsers may fail,
+//! typically if the first (few) token(s) are/is unexpected.
+//!
+//! [spec]: https://www-verimag.imag.fr/DIST-TOOLS/SYNCHRONE/lustre-v6/doc/lv6-ref-man.pdf
+
+use super::ParserError as RustreParseError;
 use crate::rowan_nom::*;
 
 use crate::lexer::Token::{self, *};
 
 type Lang = crate::LustreLang;
-type Children = crate::rowan_nom::Children<Lang, super::Error>;
+type Children = crate::rowan_nom::Children<Lang, super::ParserError>;
 type Input<'slice, 'src> = crate::rowan_nom::Input<'slice, 'src, Lang>;
-type IResult<'slice, 'src, E = super::Error> =
-    crate::rowan_nom::IResult<'slice, 'src, Lang, super::Error, E>;
-type RootIResult<'slice, 'src, E = super::Error> =
-    crate::rowan_nom::RootIResult<'slice, 'src, Lang, super::Error, E>;
+type IResult<'slice, 'src, E = super::ParserError> =
+    crate::rowan_nom::IResult<'slice, 'src, Lang, super::ParserError, E>;
+type RootIResult<'slice, 'src, E = super::ParserError> =
+    crate::rowan_nom::RootIResult<'slice, 'src, Lang, super::ParserError, E>;
 
 // Utils
 
@@ -42,7 +58,7 @@ pub fn many_delimited<'slice, 'src: 'slice, IE: RowanNomError<Lang>>(
                     // TODO: more specific "UnexpectedToken" node below ?
                     children += new_children.into_node(Error);
 
-                    let err = super::Error::from_message("many_preceded is skipping");
+                    let err = super::ParserError::from_message("many_preceded is skipping");
                     children += Children::from_err(err);
                 } else {
                     // TODO: maybe don't error, but consider eof as a RIGHT equivalent + silent error
@@ -99,7 +115,6 @@ pub fn parse_include<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice
 
 /// Include or OneDecl (ConstDecl, TypeDecl, ExtNodeDecl, NodeDecl) or OnePack
 pub fn parse_top_level_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    // FIXME: not all possibilities are handled (see rustdoc comment just above)
     alt((
         parse_include,
         constant_decl::parse_const_decl,
@@ -185,7 +200,7 @@ fn parse_predef_op_t<'slice, 'src: 'slice, P>(
     mut t: impl FnMut(Token) -> P,
 ) -> impl FnMut(Input<'slice, 'src>) -> IResult<'slice, 'src>
 where
-    P: nom::Parser<Input<'slice, 'src>, Children, super::Error>,
+    P: nom::Parser<Input<'slice, 'src>, Children, super::ParserError>,
 {
     move |input| {
         alt((

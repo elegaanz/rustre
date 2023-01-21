@@ -1,5 +1,7 @@
+use crate::LustreLang;
 use enum_ordinalize::Ordinalize;
-use logos::{Lexer, Logos, SpannedIter};
+use logos::{Lexer as LogosLexer, Logos, SpannedIter};
+use std::ops::Range;
 
 #[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone, Ordinalize)]
 /// A token
@@ -417,40 +419,54 @@ pub enum Token {
     ConstantNode,
 }
 
-pub trait LexerExpansionExt: Iterator + Sized {
-    type ExpandedLexerItem: Iterator<Item = Self::Item>;
+impl Token {
+    /// Returns `true` if and only if a token is considered "trivia" (space or comment)
+    pub fn is_trivia(self) -> bool {
+        matches!(self, Token::Comment | Token::InlineComment | Token::Space)
+    }
 
-    fn expand_one(item: Self::Item) -> Self::ExpandedLexerItem;
-    fn expanded(
-        self,
-    ) -> std::iter::FlatMap<Self, Self::ExpandedLexerItem, fn(Self::Item) -> Self::ExpandedLexerItem>
-    {
-        self.flat_map(Self::expand_one)
+    /// Returns `true` if and only if a token is not considered "trivia" (space or comment)
+    ///
+    /// Most tokens are not trivia.
+    pub fn is_non_trivia(self) -> bool {
+        !self.is_trivia()
     }
 }
 
-impl<'source> LexerExpansionExt for Lexer<'source, Token> {
-    type ExpandedLexerItem = std::iter::Take<std::array::IntoIter<Self::Item, 2>>;
+/// [Iterator] of lazily-parsed ([Token], [Range<usize>][Range])
+///
+/// The range corresponds to the location of the tokens in the source code.
+pub struct Lexer<'source> {
+    source: SpannedIter<'source, Token>,
+    next: Option<(Token, Range<usize>)>,
+}
 
-    fn expand_one(item: Self::Item) -> Self::ExpandedLexerItem {
-        match item {
-            Token::IConstAndCDots => [Token::IConst, Token::CDots].into_iter().take(2),
-            other => [other, Token::Error].into_iter().take(1),
+impl<'source> Lexer<'source> {
+    // TODO support lexing arbitrary byte arrays
+    pub fn from_source(source: &'source str) -> Self {
+        Lexer {
+            source: LogosLexer::new(source).spanned(),
+            next: None,
         }
     }
 }
 
-impl<'source> LexerExpansionExt for SpannedIter<'source, Token> {
-    type ExpandedLexerItem = std::iter::Take<std::array::IntoIter<Self::Item, 2>>;
+impl<'source> Iterator for Lexer<'source> {
+    type Item = (Token, Range<usize>);
 
-    fn expand_one(item: Self::Item) -> Self::ExpandedLexerItem {
-        match item {
-            (Token::IConstAndCDots, span) => {
-                let i_const = (Token::IConst, span.start..span.end - 2);
-                let c_dots = (Token::CDots, span.end - 2..span.end);
-                [i_const, c_dots].into_iter().take(2)
-            }
-            other => [other, (Token::Error, 0..0)].into_iter().take(1),
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(next) = self.next.take() {
+            Some(next)
+        } else {
+            self.source.next().map(|token| match token {
+                (Token::IConstAndCDots, span) => {
+                    let i_const = (Token::IConst, span.start..span.end - 2);
+                    let c_dots = (Token::CDots, span.end - 2..span.end);
+                    debug_assert!(self.next.replace(c_dots).is_none());
+                    i_const
+                }
+                other => other,
+            })
         }
     }
 }
@@ -461,8 +477,6 @@ impl From<Token> for rowan::SyntaxKind {
     }
 }
 
-#[derive(Hash, Ord, PartialOrd, PartialEq, Eq, Debug, Copy, Clone)]
-pub enum LustreLang {}
 impl rowan::Language for LustreLang {
     type Kind = Token;
 
@@ -477,7 +491,7 @@ impl rowan::Language for LustreLang {
 
 impl crate::rowan_nom::RowanNomLanguage for LustreLang {
     fn is_trivia(kind: Self::Kind) -> bool {
-        matches!(kind, Token::Comment | Token::InlineComment | Token::Space)
+        kind.is_trivia()
     }
 
     fn get_error_kind() -> Self::Kind {

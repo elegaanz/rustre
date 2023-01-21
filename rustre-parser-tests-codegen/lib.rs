@@ -33,7 +33,7 @@ fn build_test(path: PathBuf, should_fail: bool) -> TokenStream {
     // TODO remove the concat! once we can lex end-of-file line comments
     let parse_quote = quote! {
         let source = concat!(include_str!(#path_lit), "\n");
-        let Parse { errors, .. } = Parse::parse(source);
+        let (_, errors) = parse(source);
     };
 
     if !should_fail {
