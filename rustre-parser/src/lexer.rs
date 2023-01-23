@@ -1,470 +1,501 @@
-use crate::location::{Location, Span, Spanned};
+use crate::LustreLang;
+use enum_ordinalize::Ordinalize;
+use logos::{Lexer as LogosLexer, Logos, SpannedIter};
+use std::ops::Range;
 
-/// A spanned token
-pub type Tok<'a, 'f> = Spanned<'f, TokInfo<'a>>;
-
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Logos, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Copy, Clone, Ordinalize)]
 /// A token
-pub enum TokInfo<'a> {
-    EOF,
+#[repr(u16)]
+pub enum Token {
+    /// Whitespace character
+    ///
+    /// Includes: spaces, tabs, newlines, carriage returns, form feeds
+    #[regex("[ \t\n\r\u{0C}]")]
+    Space,
+
+    #[token("extern")]
     Extern,
+
+    #[token("unsafe")]
     Unsafe,
+
+    #[token("and")]
     And,
+
+    #[token("->")]
     Arrow,
+
+    #[token("assert")]
     Assert,
+
+    #[token("|")]
     Bar,
+
+    #[token("bool")]
     Bool,
+
+    #[token("..")]
     CDots,
+
+    #[token("}")]
     CloseBrace,
+
+    #[token("]")]
     CloseBracket,
+
+    #[token(")")]
     ClosePar,
+
+    #[token(">>")]
     CloseStaticPar,
+
+    #[token(":")]
     Colon,
-    Coma,
+
+    #[token(",")]
+    Comma,
+
+    #[token("const")]
     Const,
+
+    #[token("current")]
     Current,
-    Sharp,
+
+    #[token("#")]
+    Diese,
+
+    #[token("div")]
     Div,
+
+    #[token("::")]
     DoubleColon,
+
+    #[token(".")]
     Dot,
+
+    #[token("=")]
     Equal,
+
+    #[token("else")]
     Else,
+
+    #[token("enum")]
     Enum,
+
+    #[token("false")]
     False,
+
+    #[token("function")]
     Function,
+
+    #[token(">")]
     Gt,
+
+    #[token(">=")]
     Gte,
+
+    #[token("^")]
     Hat,
-    IConst(i64),
-    Ident(&'a str),
+
+    #[regex(r"\d+")]
+    IConst,
+
+    /// A very special case to handle an [IConst][Token::IConst] directly followed by a `..`
+    /// ([CDots][Token::CDots]) operator.
+    ///
+    /// This specialization is important to be able to parse [RConst][Token::RConst] properly, or
+    /// else `1..2` would be parsed as `1.` `.` `2` which is a syntax error and not what's supposed
+    /// to be parsed in the first place.
+    ///
+    /// This weird trick of treating two tokens as one could be avoided if [`logos`] supported
+    /// regex lookaheads, so [RConst][Token::RConst] could reject a list of digits followed by 2
+    /// dots.
+    #[regex(r"\d+\.\.", priority = 11)]
+    IConstAndCDots,
+
+    #[regex("[a-zA-Z_][a-zA-Z0-9_]*")] // TODO: check
+    Ident,
+
+    #[token("if")]
     If,
+
+    #[token("=>")]
     Impl,
+
+    #[token("int")]
     Int,
+
+    #[token("let")]
     Let,
+
+    #[token("<")]
     Lt,
+
+    #[token("<=")]
     Lte,
+
+    #[token("merge")]
     Merge,
+
+    #[token("-")]
     Minus,
+
+    #[token("mod")]
     Mod,
+
+    #[token("<>")]
     Neq,
+
+    #[token("node")]
     Node,
+
+    #[token("nor")]
     Nor,
+
+    #[token("not")]
     Not,
+
+    #[token("{")]
     OpenBrace,
+
+    #[token("[")]
     OpenBracket,
+
+    #[token("(")]
     OpenPar,
+
+    #[token("<<")]
     OpenStaticPar,
+
+    #[token("operator")]
     Operator,
+
+    #[token("or")]
     Or,
+
+    #[token("%")]
     Percent,
+
+    #[token("+")]
     Plus,
+
+    #[token("**")]
     Power,
+
+    #[token("pre")]
     Pre,
+
+    #[token("fby")]
     FBy,
-    RConst(f64),
+
+    /// Recognizes a floating-point literal
+    ///
+    /// The regex is intentionally a bit greedy, but this gives room for better errors if the value
+    /// is unparseable.
+    #[regex(r"\d+\.\d*(e[+-]?\d+)?")]
+    RConst,
+
+    #[token("real")]
     Real,
+
+    #[token("returns")]
     Returns,
+
+    #[token(";")]
     Semicolon,
+
+    #[token("/")]
     Slash,
+
+    #[token("*")]
     Star,
+
+    #[token("step")]
     Step,
+
+    #[token("struct")]
     Struct,
+
+    #[token("tel")]
     Tel,
+
+    #[token("then")]
     Then,
+
+    #[token("true")]
     True,
+
+    #[token("type")]
     Type,
+
+    #[token("var")]
     Var,
+
+    #[token("when")]
     When,
+
+    #[token("with")]
     With,
+
+    #[token("xor")]
     Xor,
+
+    #[token("model")]
     Model,
+
+    #[token("package")]
     Package,
+
+    #[token("needs")]
     Needs,
+
+    #[token("provides")]
     Provides,
+
+    #[token("uses")]
     Uses,
+
+    #[token("is")]
     Is,
+
+    #[token("body")]
     Body,
+
+    #[token("end")]
     End,
+
+    #[token("include")]
     Include,
-    Str(&'a str),
-}
 
-#[derive(Copy, Clone, Eq, PartialEq)]
-enum Grammar {
-    Main,
+    #[regex(r#""([^"]|\\")*""#)]
     Str,
+
+    #[regex(r"--.*\n")]
     InlineComment,
-    Comment(char),
+
+    #[regex(r"/\*([^*]|\*[^/])*\*/")]
+    #[regex(r"\(\*([^*]|\*[^\)])*\*\)")]
+    Comment,
+
+    #[error]
+    Error,
+
+    // Composite nodes
+
+    // Ebnf group ProgramRules
+    Root,
+
+    /// Children: Include + String
+    IncludeStatement,
+
+    // Ebnf group PackageRules
+    PackageDeclNode,
+    PackageDeclBody,
+    PackageAliasNode,
+    UsesNode,
+
+    // Ebnf group ModelRules
+    ProvidesNode,
+    ModelDeclNode,
+
+    // Ebnf group IdentRules
+    IdNode,
+    PragmaNode,
+
+    // Ebnf group NodesRules
+    TypedLv6IdsNode,
+    TypedValuedLv6IdNode,
+    NodeNode,
+    ParamsNode,
+
+    // Ebnf group ConstantDeclRules
+    ConstantDeclNode,
+    OneConstantDeclNode,
+
+    // Ebnf group TypeDeclRules
+    TypeDeclNode,
+    OneTypeDeclNode,
+    EnumDeclNode,
+    StructDeclNode,
+
+    // Ebnf group SimpleTypeRules
+    TypeNode,
+
+    // Ebnf group ExtNodesRules
+    ExternalNodeDeclNode,
+
+    // Ebnf group StaticRules
+    StaticParamsNode,
+    StaticParamNode,
+    EffectiveNodeNode,
+    StaticArgsNode,
+    StaticArgNode,
+    NamedStaticArgsNode,
+    NamedStaticArgNode,
+
+    // Ebnf group BodyRules
+    BodyNode,
+    AssertEquationNode,
+    EqualsEquationNode,
+
+    // Ebnf group LeftRules
+    LeftNode,
+    LeftFieldAccessNode,
+    LeftTableAccessNode,
+    SelectNode,
+    StepNode,
+
+    // Ebnf group ExpressionRules
+    ExpressionNode,
+
+    ParExpressionNode,
+    ArrayLiteralExpressionNode,
+    IdentExpressionNode,
+
+    FbyExpressionNode,
+
+    CallByPosExpressionNode,
+    ArrayAccessExpressionNode,
+
+    HatExpressionNode,
+    FieldAccessExpressionNode,
+
+    NegExpressionNode,
+    PreExpressionNode,
+    CurrentExpressionNode,
+    DieseExpressionNode,
+    NorExpressionNode,
+
+    IntExpressionNode,
+    RealExpressionNode,
+
+    WhenExpressionNode,
+
+    PowerExpressionNode,
+
+    MulExpressionNode,
+    DivExpressionNode,
+    ModExpressionNode,
+
+    AddExpressionNode,
+    SubExpressionNode,
+
+    NotExpressionNode,
+
+    LtExpressionNode,
+    LteExpressionNode,
+    EqExpressionNode,
+    GteExpressionNode,
+    GtExpressionNode,
+    NeqExpressionNode,
+
+    AndExpressionNode,
+    OrExpressionNode,
+    XorExpressionNode,
+
+    ImplExpressionNode,
+
+    ArrowExpressionNode,
+
+    ConcatExpressionNode,
+
+    IfExpressionNode,
+
+    ClockExpressionNode,
+
+    MergeExpressionNode,
+
+    // Ebnf group MergeRules
+    MergeCaseNode,
+
+    // Ebnf group PredefRules
+    PredefOp,
+
+    // Ebnf group ExpressionByNamesRules
+    CallByNameExpressionNode,
+    CallByNameParamNode,
+
+    // Ebnf group ConstantRules
+    ConstantNode,
 }
 
-#[cfg_attr(test, derive(PartialEq))]
-#[derive(Debug)]
-/// Lexing error
-pub enum Error {
-    UnclosedStr,
-    UnclosedComment,
-}
+impl Token {
+    /// Returns `true` if and only if a token is considered "trivia" (space or comment)
+    pub fn is_trivia(self) -> bool {
+        matches!(self, Token::Comment | Token::InlineComment | Token::Space)
+    }
 
-/// A lexer for Lustre v6 files
-pub struct Lexer<'a, 'f> {
-    file: &'f str,
-    src: &'a str,
-}
-
-#[derive(PartialEq, Debug)]
-enum MatchResult<'a> {
-    NotYetMatched,
-    NoMatches,
-    Ambiguous(Vec<TokInfo<'a>>),
-    Match(LexMatch<'a>),
-    ManyMatches(Vec<TokInfo<'a>>),
-}
-
-#[derive(PartialEq, Debug)]
-enum LexMatch<'a> {
-    Tok(TokInfo<'a>),
-    Comment(&'a str),
-}
-
-impl<'a, 'f> Lexer<'a, 'f> {
-    /// Initializes a new lexer
+    /// Returns `true` if and only if a token is not considered "trivia" (space or comment)
     ///
-    /// # Parameters
-    ///
-    /// - `file`: the path of the file
-    /// - `src`: the contents of the file
-    pub fn new(file: &'f str, src: &'a str) -> Self {
-        Lexer { file, src }
+    /// Most tokens are not trivia.
+    pub fn is_non_trivia(self) -> bool {
+        !self.is_trivia()
     }
+}
 
-    /// Generates a list of tokens from the file
-    pub fn lex(&mut self) -> Result<Vec<Tok>, Error> {
-        let total_len = self.src.len();
-        let mut res = Vec::with_capacity(total_len / 4);
-        let mut start = 0;
-        let mut end = 0;
-        let mut grammar = Grammar::Main;
-        let mut line = 1;
-        let mut col = 0;
-        while end < total_len {
-            let mut last_span = Span::default();
-            let mut last_match = MatchResult::NotYetMatched;
-            let mut curr_match = MatchResult::NotYetMatched;
-            let mut last_end = end;
-            while end <= total_len && curr_match != MatchResult::NoMatches {
-                let src_slice = &self.src[start..end];
-                match src_slice {
-                    "" => {}
-                    "--" => grammar = Grammar::InlineComment,
-                    "/*" => grammar = Grammar::Comment('/'),
-                    "(*" => grammar = Grammar::Comment(')'),
-                    "\"" => grammar = Grammar::Str,
-                    _ => {
-                        last_span = self.span(line, col, start, last_end - start);
-                        last_match = curr_match;
-                        curr_match = match grammar {
-                            Grammar::InlineComment => self.match_inline_comm(src_slice),
-                            Grammar::Comment(delim) => self.match_comm(src_slice, delim),
-                            Grammar::Str => self.match_str(src_slice),
-                            Grammar::Main => self.match_tokens(src_slice),
-                        };
-                        if curr_match != MatchResult::NotYetMatched {
-                            grammar = Grammar::Main;
-                        }
-                    }
-                }
-                if curr_match != MatchResult::NoMatches {
-                    last_end = end;
-                    end = self.next_char(end, 1);
-                }
-            }
+/// [Iterator] of lazily-parsed ([Token], [Range<usize>][Range])
+///
+/// The range corresponds to the location of the tokens in the source code.
+pub struct Lexer<'source> {
+    source: SpannedIter<'source, Token>,
+    next: Option<(Token, Range<usize>)>,
+}
 
-            let added_lines = self.src[last_span.start.pos as usize..last_span.end.pos as usize]
-                .chars()
-                .filter(|c| *c == '\n')
-                .count();
-            if added_lines != 0 {
-                line += added_lines;
-                col = 0;
-            }
-            let added_cols = self.src[last_span.start.pos as usize..last_span.end.pos as usize]
-                .lines()
-                .last()
-                .unwrap_or_default()
-                .len();
-            col += added_cols;
-
-            if end == total_len + 1 {
-                last_match = curr_match;
-            }
-
-            match last_match {
-                MatchResult::Match(LexMatch::Tok(m)) => {
-                    res.push(Spanned {
-                        span: last_span.clone(),
-                        item: m,
-                    });
-                    end = last_end;
-                }
-                MatchResult::ManyMatches(matches) | MatchResult::Ambiguous(matches) => {
-                    for m in matches {
-                        res.push(Spanned {
-                            span: last_span.clone(),
-                            item: m,
-                        });
-                    }
-                    end = last_end;
-                }
-                _ => {}
-            }
-            start = last_end;
+impl<'source> Lexer<'source> {
+    // TODO support lexing arbitrary byte arrays
+    pub fn from_source(source: &'source str) -> Self {
+        Lexer {
+            source: LogosLexer::new(source).spanned(),
+            next: None,
         }
-        if grammar == Grammar::Str {
-            Err(Error::UnclosedStr)
-        } else if let Grammar::Comment(_) = grammar {
-            Err(Error::UnclosedComment)
+    }
+}
+
+impl<'source> Iterator for Lexer<'source> {
+    type Item = (Token, Range<usize>);
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if let Some(next) = self.next.take() {
+            Some(next)
         } else {
-            res.push(Spanned {
-                span: self.span(line, col, start, 0),
-                item: TokInfo::EOF,
-            });
-            Ok(res)
-        }
-    }
-
-    fn next_char(&self, from: usize, add: isize) -> usize {
-        Self::next_char_in(self.src, from, add)
-    }
-
-    fn next_char_in(src: &str, from: usize, add: isize) -> usize {
-        let mut new_pos = (from as isize) + add;
-        while !src.is_char_boundary(new_pos as usize) && (new_pos as usize) < src.len() {
-            new_pos += add.signum();
-        }
-        new_pos as usize
-    }
-
-    fn match_inline_comm(&self, src_slice: &'a str) -> MatchResult<'a> {
-        let len = src_slice.len();
-        let start = Self::next_char_in(src_slice, len, -1);
-        if &src_slice[start..] == "\n" {
-            MatchResult::Match(LexMatch::Comment(&src_slice[2..]))
-        } else {
-            MatchResult::NotYetMatched
-        }
-    }
-
-    fn match_comm(&self, src_slice: &'a str, delim: char) -> MatchResult<'a> {
-        let end = format!("*{}", delim);
-        let len = src_slice.len();
-        let start = Self::next_char_in(src_slice, len, -2);
-        if &src_slice[start..] == &end {
-            MatchResult::Match(LexMatch::Comment(&src_slice[2..start]))
-        } else {
-            MatchResult::NotYetMatched
-        }
-    }
-
-    fn match_str(&self, src_slice: &'a str) -> MatchResult<'a> {
-        let len = src_slice.len();
-        let start = Self::next_char_in(src_slice, len, -1);
-        if &src_slice[start..] == "\"" {
-            MatchResult::Match(LexMatch::Tok(TokInfo::Str(&src_slice[1..start])))
-        } else {
-            MatchResult::NotYetMatched
-        }
-    }
-
-    fn match_tokens(&self, src_slice: &'a str) -> MatchResult<'a> {
-        match src_slice {
-            " " | "\t" | "\n" | "\r" => MatchResult::NoMatches,
-            "," => MatchResult::Match(LexMatch::Tok(TokInfo::Coma)),
-            ";" => MatchResult::Match(LexMatch::Tok(TokInfo::Semicolon)),
-            "::" => MatchResult::Match(LexMatch::Tok(TokInfo::DoubleColon)),
-            ":" => MatchResult::Match(LexMatch::Tok(TokInfo::Colon)),
-            "->" => MatchResult::Match(LexMatch::Tok(TokInfo::Arrow)),
-            "=>" => MatchResult::Match(LexMatch::Tok(TokInfo::Impl)),
-            "<=" => MatchResult::Match(LexMatch::Tok(TokInfo::Lte)),
-            "<>" => MatchResult::Match(LexMatch::Tok(TokInfo::Neq)),
-            ">=" => MatchResult::Match(LexMatch::Tok(TokInfo::Gte)),
-            ".." => MatchResult::Match(LexMatch::Tok(TokInfo::CDots)),
-            "**" => MatchResult::Match(LexMatch::Tok(TokInfo::Power)),
-            "<<" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenStaticPar)),
-            ">>" => MatchResult::Match(LexMatch::Tok(TokInfo::CloseStaticPar)),
-            "+" => MatchResult::Match(LexMatch::Tok(TokInfo::Plus)),
-            "^" => MatchResult::Match(LexMatch::Tok(TokInfo::Hat)),
-            "#" => MatchResult::Match(LexMatch::Tok(TokInfo::Sharp)),
-            "-" => MatchResult::Ambiguous(vec![TokInfo::Minus]),
-            "/" => MatchResult::Match(LexMatch::Tok(TokInfo::Slash)),
-            "%" => MatchResult::Match(LexMatch::Tok(TokInfo::Percent)),
-            "*" => MatchResult::Match(LexMatch::Tok(TokInfo::Star)),
-            "|" => MatchResult::Match(LexMatch::Tok(TokInfo::Bar)),
-            "=" => MatchResult::Match(LexMatch::Tok(TokInfo::Equal)),
-            "." => MatchResult::Match(LexMatch::Tok(TokInfo::Dot)),
-            "(" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenPar)),
-            ")" => MatchResult::Match(LexMatch::Tok(TokInfo::ClosePar)),
-            "{" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenBrace)),
-            "}" => MatchResult::Match(LexMatch::Tok(TokInfo::CloseBrace)),
-            "[" => MatchResult::Match(LexMatch::Tok(TokInfo::OpenBracket)),
-            "]" => MatchResult::Match(LexMatch::Tok(TokInfo::CloseBracket)),
-            "<" => MatchResult::Match(LexMatch::Tok(TokInfo::Lt)),
-            ">" => MatchResult::Match(LexMatch::Tok(TokInfo::Gt)),
-            "extern" => MatchResult::Match(LexMatch::Tok(TokInfo::Extern)),
-            "unsafe" => MatchResult::Match(LexMatch::Tok(TokInfo::Unsafe)),
-            "and" => MatchResult::Match(LexMatch::Tok(TokInfo::And)),
-            "assert" => MatchResult::Match(LexMatch::Tok(TokInfo::Assert)),
-            "bool" => MatchResult::Match(LexMatch::Tok(TokInfo::Bool)),
-            "const" => MatchResult::Match(LexMatch::Tok(TokInfo::Const)),
-            "current" => MatchResult::Match(LexMatch::Tok(TokInfo::Current)),
-            "div" => MatchResult::Match(LexMatch::Tok(TokInfo::Div)),
-            "else" => MatchResult::Match(LexMatch::Tok(TokInfo::Else)),
-            "enum" => MatchResult::Match(LexMatch::Tok(TokInfo::Enum)),
-            "function" => MatchResult::Match(LexMatch::Tok(TokInfo::Function)),
-            "false" => MatchResult::Match(LexMatch::Tok(TokInfo::False)),
-            "if" => MatchResult::Match(LexMatch::Tok(TokInfo::If)),
-            "int" => MatchResult::Match(LexMatch::Tok(TokInfo::Int)),
-            "let" => MatchResult::Match(LexMatch::Tok(TokInfo::Let)),
-            "mod" => MatchResult::Match(LexMatch::Tok(TokInfo::Mod)),
-            "node" => MatchResult::Match(LexMatch::Tok(TokInfo::Node)),
-            "not" => MatchResult::Match(LexMatch::Tok(TokInfo::Not)),
-            "operator" => MatchResult::Match(LexMatch::Tok(TokInfo::Operator)),
-            "or" => MatchResult::Match(LexMatch::Tok(TokInfo::Or)),
-            "nor" => MatchResult::Match(LexMatch::Tok(TokInfo::Nor)),
-            "fby" => MatchResult::Match(LexMatch::Tok(TokInfo::FBy)),
-            "pre" => MatchResult::Match(LexMatch::Tok(TokInfo::Pre)),
-            "real" => MatchResult::Match(LexMatch::Tok(TokInfo::Real)),
-            "returns" => MatchResult::Match(LexMatch::Tok(TokInfo::Returns)),
-            "step" => MatchResult::Match(LexMatch::Tok(TokInfo::Step)),
-            "struct" => MatchResult::Match(LexMatch::Tok(TokInfo::Struct)),
-            "tel" => MatchResult::Match(LexMatch::Tok(TokInfo::Tel)),
-            "type" => MatchResult::Match(LexMatch::Tok(TokInfo::Type)),
-            "then" => MatchResult::Match(LexMatch::Tok(TokInfo::Then)),
-            "true" => MatchResult::Match(LexMatch::Tok(TokInfo::True)),
-            "var" => MatchResult::Match(LexMatch::Tok(TokInfo::Var)),
-            "when" => MatchResult::Match(LexMatch::Tok(TokInfo::When)),
-            "with" => MatchResult::Match(LexMatch::Tok(TokInfo::With)),
-            "xor" => MatchResult::Match(LexMatch::Tok(TokInfo::Xor)),
-            "model" => MatchResult::Match(LexMatch::Tok(TokInfo::Model)),
-            "package" => MatchResult::Match(LexMatch::Tok(TokInfo::Package)),
-            "needs" => MatchResult::Match(LexMatch::Tok(TokInfo::Needs)),
-            "provides" => MatchResult::Match(LexMatch::Tok(TokInfo::Provides)),
-            "uses" => MatchResult::Match(LexMatch::Tok(TokInfo::Uses)),
-            "is" => MatchResult::Match(LexMatch::Tok(TokInfo::Is)),
-            "body" => MatchResult::Match(LexMatch::Tok(TokInfo::Body)),
-            "end" => MatchResult::Match(LexMatch::Tok(TokInfo::End)),
-            "include" => MatchResult::Match(LexMatch::Tok(TokInfo::Include)),
-            "merge" => MatchResult::Match(LexMatch::Tok(TokInfo::Merge)),
-            x if x.chars().all(char::is_numeric) => {
-                MatchResult::Match(LexMatch::Tok(TokInfo::IConst(x.parse::<i64>().unwrap())))
-            }
-            x if x.chars().all(|c| {
-                c.is_numeric() || c == '.' || c == 'e' || c == 'E' || c == '+' || c == '-'
-            }) && x.chars().any(char::is_numeric)
-                && (!(x.contains('+') || x.contains('-'))
-                    || x.contains("e-")
-                    || x.contains("e+")
-                    || x.contains("E+")
-                    || x.contains("E-")) =>
-            {
-                // Maybe we are parsing something like `1..2`
-                if x.ends_with('.') {
-                    if x.ends_with("..") {
-                        MatchResult::ManyMatches(vec![
-                            TokInfo::IConst(x[..x.len() - 2].parse::<i64>().unwrap()),
-                            TokInfo::CDots,
-                        ])
-                    } else {
-                        MatchResult::Ambiguous(vec![TokInfo::RConst(x.parse::<f64>().unwrap())])
-                    }
-                } else if x.contains("..") {
-                    MatchResult::NoMatches
-                } else if x.starts_with('e') || x.starts_with('E') {
-                    MatchResult::Match(LexMatch::Tok(TokInfo::Ident(x)))
-                } else if x.ends_with('e') || x.ends_with('E') {
-                    MatchResult::NotYetMatched
-                } else if x.ends_with('-') {
-                    let mut tokens = Vec::with_capacity(2);
-                    match self.match_tokens(&x[..x.len() - 1]) {
-                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
-                            tokens.append(t)
-                        }
-                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
-                        _ => {}
-                    }
-                    tokens.push(TokInfo::Minus);
-                    MatchResult::Ambiguous(tokens)
-                } else if x.ends_with('+') {
-                    let mut tokens = Vec::with_capacity(2);
-                    match self.match_tokens(&x[..x.len() - 1]) {
-                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
-                            tokens.append(t)
-                        }
-                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
-                        _ => {}
-                    }
-                    tokens.push(TokInfo::Plus);
-                    MatchResult::Ambiguous(tokens)
-                } else if x.starts_with('-') {
-                    let mut tokens = Vec::with_capacity(2);
-                    tokens.push(TokInfo::Minus);
-                    match self.match_tokens(&x[1..]) {
-                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
-                            tokens.append(t)
-                        }
-                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
-                        _ => {}
-                    }
-                    MatchResult::ManyMatches(tokens)
-                } else if x.starts_with('+') {
-                    let mut tokens = Vec::with_capacity(2);
-                    tokens.push(TokInfo::Plus);
-                    match self.match_tokens(&x[1..]) {
-                        MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
-                            tokens.append(t)
-                        }
-                        MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
-                        _ => {}
-                    }
-                    MatchResult::ManyMatches(tokens)
-                } else {
-                    MatchResult::Match(LexMatch::Tok(TokInfo::RConst(x.parse::<f64>().unwrap())))
+            self.source.next().map(|token| match token {
+                (Token::IConstAndCDots, span) => {
+                    let i_const = (Token::IConst, span.start..span.end - 2);
+                    let c_dots = (Token::CDots, span.end - 2..span.end);
+                    debug_assert!(self.next.replace(c_dots).is_none());
+                    i_const
                 }
-            }
-            x if x.chars().all(|c| c.is_alphanumeric() || c == '_') => {
-                MatchResult::Match(LexMatch::Tok(TokInfo::Ident(x)))
-            }
-            // yet another special case for real constants
-            // this one is for handling things like: 1->pre x
-            x if x.ends_with("->") => {
-                let mut tokens = Vec::with_capacity(2);
-                match self.match_tokens(&x[..x.len() - 2]) {
-                    MatchResult::Ambiguous(ref mut t) | MatchResult::ManyMatches(ref mut t) => {
-                        tokens.append(t)
-                    }
-                    MatchResult::Match(LexMatch::Tok(m)) => tokens.push(m),
-                    _ => {}
-                }
-                tokens.push(TokInfo::Arrow);
-                MatchResult::ManyMatches(tokens)
-            }
-            _ => MatchResult::NoMatches,
+                other => other,
+            })
         }
     }
+}
 
-    fn span(&self, line: usize, col: usize, pos: usize, len: usize) -> Span {
-        Span {
-            start: Location {
-                line: line as u64,
-                col: col as u64,
-                pos: pos as u64,
-            },
-            end: Location {
-                line: line as u64, // no token can be on multiple lines as far as I know
-                col: (col + len) as u64,
-                pos: (pos + len) as u64,
-            },
-            file: self.file,
-        }
+impl From<Token> for rowan::SyntaxKind {
+    fn from(tok: Token) -> Self {
+        Self(tok as u16)
+    }
+}
+
+impl rowan::Language for LustreLang {
+    type Kind = Token;
+
+    fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
+        Token::from_ordinal(raw.0).unwrap()
+    }
+
+    fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
+        rowan::SyntaxKind(kind.ordinal())
+    }
+}
+
+impl crate::rowan_nom::RowanNomLanguage for LustreLang {
+    fn is_trivia(kind: Self::Kind) -> bool {
+        kind.is_trivia()
+    }
+
+    fn get_error_kind() -> Self::Kind {
+        Token::Error
     }
 }
 
@@ -472,29 +503,20 @@ impl<'a, 'f> Lexer<'a, 'f> {
 mod tests {
     use super::*;
 
-    fn check_tok_info<'a, 'f>(actual: Vec<Tok<'a, 'f>>, expected: Vec<TokInfo<'a>>) {
-        dbg!(&actual);
-        assert_eq!(actual.len(), expected.len());
-
-        for (ref a, ref e) in actual.iter().zip(expected.iter()) {
-            assert_eq!(a.item, **e);
-        }
-    }
-
-    fn test_lexer<'a>(src: &'a str, expected: Vec<TokInfo<'a>>) {
-        let mut lex = Lexer::new("main.lus", src);
-        let toks = lex.lex().unwrap();
-        check_tok_info(toks, expected);
+    fn test_lexer(src: &str, expected: Vec<Token>) {
+        let lex = Token::lexer(src);
+        let toks: Vec<_> = lex.collect();
+        assert_eq!(toks, expected);
     }
 
     #[test]
     fn test_empty() {
-        test_lexer("", vec![TokInfo::EOF])
+        test_lexer("", vec![])
     }
 
     #[test]
     fn test_keyword() {
-        test_lexer("function", vec![TokInfo::Function, TokInfo::EOF])
+        test_lexer("function", vec![Token::Function])
     }
 
     #[test]
@@ -502,12 +524,11 @@ mod tests {
         test_lexer(
             "y=0->pre",
             vec![
-                TokInfo::Ident("y"),
-                TokInfo::Equal,
-                TokInfo::IConst(0),
-                TokInfo::Arrow,
-                TokInfo::Pre,
-                TokInfo::EOF,
+                Token::Ident,
+                Token::Equal,
+                Token::IConst,
+                Token::Arrow,
+                Token::Pre,
             ],
         )
     }
@@ -516,27 +537,53 @@ mod tests {
     fn test_keywords() {
         test_lexer(
             "extern function",
-            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+            vec![Token::Extern, Token::Space, Token::Function],
         );
-        test_lexer(
-            "functional",
-            vec![TokInfo::Ident("functional"), TokInfo::EOF],
-        );
+        test_lexer("functional", vec![Token::Ident]);
     }
 
     #[test]
     fn test_spaces() {
         test_lexer(
             "extern\n  \t\r\nfunction",
-            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+            vec![
+                Token::Extern,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Function,
+            ],
         );
         test_lexer(
             "\n  \t\r\nextern function",
-            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+            vec![
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Extern,
+                Token::Space,
+                Token::Function,
+            ],
         );
         test_lexer(
             "extern function\n  \t\r\n",
-            vec![TokInfo::Extern, TokInfo::Function, TokInfo::EOF],
+            vec![
+                Token::Extern,
+                Token::Space,
+                Token::Function,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+            ],
         );
     }
 
@@ -544,41 +591,49 @@ mod tests {
     fn test_iconst() {
         test_lexer(
             "42 -12",
-            vec![
-                TokInfo::IConst(42),
-                TokInfo::Minus,
-                TokInfo::IConst(12),
-                TokInfo::EOF,
-            ],
+            vec![Token::IConst, Token::Space, Token::Minus, Token::IConst],
         )
     }
 
     #[test]
     fn test_rconst() {
-        test_lexer("33.3", vec![TokInfo::RConst(33.3), TokInfo::EOF])
+        test_lexer("33.3", vec![Token::RConst])
     }
 
     #[test]
     fn test_str() {
         test_lexer(
             "include \"memoire.lus\"",
-            vec![TokInfo::Include, TokInfo::Str("memoire.lus"), TokInfo::EOF],
+            vec![Token::Include, Token::Space, Token::Str],
         );
     }
 
     #[test]
     fn test_comments() {
+        // TODO: a comment followed by EOF is valid, but Logos cannot handle that with regexes
         test_lexer(
-            "-- comment\nfunction\nfunction --comment",
-            vec![TokInfo::Function, TokInfo::Function, TokInfo::EOF],
+            "-- comment\nfunction\nfunction --comment\n",
+            vec![
+                Token::InlineComment,
+                Token::Function,
+                Token::Space,
+                Token::Function,
+                Token::Space,
+                Token::InlineComment,
+            ],
         );
         test_lexer(
             "include (* hello *) extern /* world */ function",
             vec![
-                TokInfo::Include,
-                TokInfo::Extern,
-                TokInfo::Function,
-                TokInfo::EOF,
+                Token::Include,
+                Token::Space,
+                Token::Comment,
+                Token::Space,
+                Token::Extern,
+                Token::Space,
+                Token::Comment,
+                Token::Space,
+                Token::Function,
             ],
         )
     }
@@ -588,21 +643,14 @@ mod tests {
         test_lexer(
             "12 + 3",
             vec![
-                TokInfo::IConst(12),
-                TokInfo::Plus,
-                TokInfo::IConst(3),
-                TokInfo::EOF,
+                Token::IConst,
+                Token::Space,
+                Token::Plus,
+                Token::Space,
+                Token::IConst,
             ],
         );
-        test_lexer(
-            "42*7",
-            vec![
-                TokInfo::IConst(42),
-                TokInfo::Star,
-                TokInfo::IConst(7),
-                TokInfo::EOF,
-            ],
-        );
+        test_lexer("42*7", vec![Token::IConst, Token::Star, Token::IConst]);
     }
 
     #[test]
@@ -610,23 +658,36 @@ mod tests {
         test_lexer(
             "a[1..2]",
             vec![
-                TokInfo::Ident("a"),
-                TokInfo::OpenBracket,
-                TokInfo::IConst(1),
-                TokInfo::CDots,
-                TokInfo::IConst(2),
-                TokInfo::CloseBracket,
-                TokInfo::EOF,
+                Token::Ident,
+                Token::OpenBracket,
+                Token::IConstAndCDots,
+                Token::IConst,
+                Token::CloseBracket,
+            ],
+        )
+    }
+
+    #[test]
+    fn test_const_slice_and_step() {
+        test_lexer(
+            "a[1..2 step 2]",
+            vec![
+                Token::Ident,
+                Token::OpenBracket,
+                Token::IConstAndCDots,
+                Token::IConst,
+                Token::Space,
+                Token::Step,
+                Token::Space,
+                Token::IConst,
+                Token::CloseBracket,
             ],
         )
     }
 
     #[test]
     fn test_ident() {
-        test_lexer(
-            "a aaaa",
-            vec![TokInfo::Ident("a"), TokInfo::Ident("aaaa"), TokInfo::EOF],
-        )
+        test_lexer("a aaaa", vec![Token::Ident, Token::Space, Token::Ident])
     }
 
     #[test]
@@ -634,81 +695,93 @@ mod tests {
         test_lexer(
             "function a<<const n : int>>()",
             vec![
-                TokInfo::Function,
-                TokInfo::Ident("a"),
-                TokInfo::OpenStaticPar,
-                TokInfo::Const,
-                TokInfo::Ident("n"),
-                TokInfo::Colon,
-                TokInfo::Int,
-                TokInfo::CloseStaticPar,
-                TokInfo::OpenPar,
-                TokInfo::ClosePar,
-                TokInfo::EOF,
+                Token::Function,
+                Token::Space,
+                Token::Ident,
+                Token::OpenStaticPar,
+                Token::Const,
+                Token::Space,
+                Token::Ident,
+                Token::Space,
+                Token::Colon,
+                Token::Space,
+                Token::Int,
+                Token::CloseStaticPar,
+                Token::OpenPar,
+                Token::ClosePar,
             ],
         );
         test_lexer(
             "x + amaury_n<<n-1>>(x);",
             vec![
-                TokInfo::Ident("x"),
-                TokInfo::Plus,
-                TokInfo::Ident("amaury_n"),
-                TokInfo::OpenStaticPar,
-                TokInfo::Ident("n"),
-                TokInfo::Minus,
-                TokInfo::IConst(1),
-                TokInfo::CloseStaticPar,
-                TokInfo::OpenPar,
-                TokInfo::Ident("x"),
-                TokInfo::ClosePar,
-                TokInfo::Semicolon,
-                TokInfo::EOF,
+                Token::Ident,
+                Token::Space,
+                Token::Plus,
+                Token::Space,
+                Token::Ident,
+                Token::OpenStaticPar,
+                Token::Ident,
+                Token::Minus,
+                Token::IConst,
+                Token::CloseStaticPar,
+                Token::OpenPar,
+                Token::Ident,
+                Token::ClosePar,
+                Token::Semicolon,
             ],
         )
     }
 
     #[test]
     fn test_unclosed_str() {
-        let mut lexer = Lexer::new("main.lus", "\"hello ");
-        assert_eq!(lexer.lex(), Err(Error::UnclosedStr));
+        test_lexer("\"hello ", vec![Token::Error]);
     }
 
     #[test]
     fn test_unclosed_comment() {
-        let mut lexer = Lexer::new("main.lus", "/* hello ");
-        assert_eq!(lexer.lex(), Err(Error::UnclosedComment));
+        test_lexer("/* hello", vec![Token::Error]);
     }
 
     #[test]
     fn test_amaury() {
-        use TokInfo::*;
         let amaury1 = r#"y = with n = 0 then 0 else
-         x + amaury_n<<n-1>>(x);"#;
+ x + amaury_n<<n-1>>(x);"#;
         test_lexer(
             amaury1,
             vec![
-                Ident("y"),
-                Equal,
-                With,
-                Ident("n"),
-                Equal,
-                IConst(0),
-                Then,
-                IConst(0),
-                Else,
-                Ident("x"),
-                Plus,
-                Ident("amaury_n"),
-                OpenStaticPar,
-                Ident("n"),
-                Minus,
-                IConst(1),
-                CloseStaticPar,
-                OpenPar,
-                Ident("x"),
-                ClosePar,
-                Semicolon,
-                EOF,
+                Token::Ident,
+                Token::Space,
+                Token::Equal,
+                Token::Space,
+                Token::With,
+                Token::Space,
+                Token::Ident,
+                Token::Space,
+                Token::Equal,
+                Token::Space,
+                Token::IConst,
+                Token::Space,
+                Token::Then,
+                Token::Space,
+                Token::IConst,
+                Token::Space,
+                Token::Else,
+                Token::Space,
+                Token::Space,
+                Token::Ident,
+                Token::Space,
+                Token::Plus,
+                Token::Space,
+                Token::Ident,
+                Token::OpenStaticPar,
+                Token::Ident,
+                Token::Minus,
+                Token::IConst,
+                Token::CloseStaticPar,
+                Token::OpenPar,
+                Token::Ident,
+                Token::ClosePar,
+                Token::Semicolon,
             ],
         );
 
@@ -724,58 +797,95 @@ node amaury = amaury_n<<4>>;
         test_lexer(
             amaury,
             vec![
-                Node,
-                Ident("amaury_n"),
-                OpenStaticPar,
-                Const,
-                Ident("n"),
-                Colon,
-                Int,
-                CloseStaticPar,
-                OpenPar,
-                Ident("x"),
-                Colon,
-                Int,
-                ClosePar,
-                Returns,
-                OpenPar,
-                Ident("y"),
-                Colon,
-                Int,
-                ClosePar,
-                Semicolon,
-                Let,
-                Ident("y"),
-                Equal,
-                With,
-                Ident("n"),
-                Equal,
-                IConst(0),
-                Then,
-                IConst(0),
-                Else,
-                Ident("x"),
-                Plus,
-                Ident("amaury_n"),
-                OpenStaticPar,
-                Ident("n"),
-                Minus,
-                IConst(1),
-                CloseStaticPar,
-                OpenPar,
-                Ident("x"),
-                ClosePar,
-                Semicolon,
-                Tel,
-                Node,
-                Ident("amaury"),
-                Equal,
-                Ident("amaury_n"),
-                OpenStaticPar,
-                IConst(4),
-                CloseStaticPar,
-                Semicolon,
-                EOF,
+                Token::Space,
+                Token::Node,
+                Token::Space,
+                Token::Ident,
+                Token::OpenStaticPar,
+                Token::Const,
+                Token::Space,
+                Token::Ident,
+                Token::Colon,
+                Token::Int,
+                Token::CloseStaticPar,
+                Token::OpenPar,
+                Token::Ident,
+                Token::Colon,
+                Token::Space,
+                Token::Int,
+                Token::ClosePar,
+                Token::Space,
+                Token::Returns,
+                Token::Space,
+                Token::OpenPar,
+                Token::Ident,
+                Token::Colon,
+                Token::Int,
+                Token::ClosePar,
+                Token::Semicolon,
+                Token::Space,
+                Token::Let,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Ident,
+                Token::Space,
+                Token::Equal,
+                Token::Space,
+                Token::With,
+                Token::Space,
+                Token::Ident,
+                Token::Space,
+                Token::Equal,
+                Token::Space,
+                Token::IConst,
+                Token::Space,
+                Token::Then,
+                Token::Space,
+                Token::IConst,
+                Token::Space,
+                Token::Else,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Space,
+                Token::Ident,
+                Token::Space,
+                Token::Plus,
+                Token::Space,
+                Token::Ident,
+                Token::OpenStaticPar,
+                Token::Ident,
+                Token::Minus,
+                Token::IConst,
+                Token::CloseStaticPar,
+                Token::OpenPar,
+                Token::Ident,
+                Token::ClosePar,
+                Token::Semicolon,
+                Token::Space,
+                Token::Tel,
+                Token::Space,
+                Token::Space,
+                Token::Node,
+                Token::Space,
+                Token::Ident,
+                Token::Space,
+                Token::Equal,
+                Token::Space,
+                Token::Ident,
+                Token::OpenStaticPar,
+                Token::IConst,
+                Token::CloseStaticPar,
+                Token::Semicolon,
+                Token::Space,
             ],
         );
     }
