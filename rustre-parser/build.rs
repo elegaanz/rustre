@@ -31,7 +31,7 @@ enum Adt {
 #[derive(Default)]
 struct Struct {
     is_token: bool,
-    unique_fields: Vec<(String, String)>,
+    unique_fields: Vec<(String, String, bool)>,
     list_fields: Vec<(String, String)>,
     optional_fields: Vec<(String, String, bool)>,
     is_fields: Vec<(String, bool)>,
@@ -110,11 +110,11 @@ impl Generator {
             }
             Rule::Node(node) => {
                 let node_name = grammar[*node].name.clone();
-                current_struct.unique_fields.push((name, node_name));
+                current_struct.unique_fields.push((name, node_name, false));
             }
             Rule::Token(tok) => {
                 let tok_name = grammar[*tok].name.clone();
-                current_struct.unique_fields.push((name, tok_name));
+                current_struct.unique_fields.push((name, Self::translate_token(&tok_name), true));
             }
             Rule::Seq(rules) => {
                 if requested_name {
@@ -231,7 +231,7 @@ impl Generator {
                     writeln!(self.out, "        Self::cast(syntax).expect(\"Failed to cast to {}\")", kind).ok();
                     writeln!(self.out, "    }}").ok();
                     writeln!(self.out, "}}").ok();
-                    if !struc.is_fields.is_empty() || !struc.list_fields.is_empty() || !struc.optional_fields.is_empty() {
+                    if !struc.is_fields.is_empty() || !struc.list_fields.is_empty() || !struc.optional_fields.is_empty() || !struc.unique_fields.is_empty() {
                         writeln!(self.out).ok();
                         writeln!(self.out, "impl {} {{", kind).ok();
                         for (is_field, is_token) in struc.is_fields {
@@ -254,6 +254,15 @@ impl Generator {
                                 writeln!(self.out, "        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map({}::cast)", ty).ok();
                             } else {
                                 writeln!(self.out, "        self.syntax().children().find_map({}::cast)", ty).ok();
+                            }
+                            writeln!(self.out, "    }}").ok();
+                        }
+                        for (unique_field, ty, is_token) in struc.unique_fields {
+                            writeln!(self.out, "    pub fn {}(&self) -> {} {{", Self::unreserv(unique_field), ty).ok();
+                            if is_token {
+                                writeln!(self.out, "        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map({}::cast).unwrap()", ty).ok();
+                            } else {
+                                writeln!(self.out, "        self.syntax().children().find_map({}::cast).unwrap()", ty).ok();
                             }
                             writeln!(self.out, "    }}").ok();
                         }
@@ -368,7 +377,7 @@ impl Generator {
 
     fn unreserv(name: String) -> String {
         match &name[..] {
-            "extern" | "unsafe" => format!("r#{}", name),
+            "extern" | "unsafe" | "const" | "type" => format!("r#{}", name),
             _ => name,
         }
     }
