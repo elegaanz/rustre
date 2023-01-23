@@ -1,5 +1,5 @@
 [package]
-name = "rustre-ast-dump"
+name = "rustre"
 version = "0.1.0"
 edition = "2021"
 
@@ -9,3 +9,4 @@ edition = "2021"
 ariadne = "0.1"
 rustre-parser = { path = "../rustre-parser" }
 rowan = "0.15.5"
+clap = {version = "4.1.1", features = ["derive"]}
