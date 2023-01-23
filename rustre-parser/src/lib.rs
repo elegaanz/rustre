@@ -156,6 +156,5 @@ pub fn parse(source: &str) -> (ast::Root, Vec<ParserError>) {
     }
 }
 
-// TODO: Make these tests opt-in (as well as the rustre_parser_tests_codegen dep)
-#[cfg(test)]
+#[cfg(all(test, feature = "tests-lustre-upstream"))]
 rustre_parser_tests_codegen::include_lustre_tests!(mod parser_tests);

@@ -6,6 +6,9 @@ edition = "2021"
 license = "GPL-3.0"
 repository = "https://github.com/elegaanz/rustre"
 
+[features]
+tests-lustre-upstream = []
+
 [dependencies]
 enum-ordinalize = "3.1"
 logos = "0.12.1"
@@ -14,6 +17,7 @@ rowan = "0.15.5"
 thiserror = "1.0"
 
 [dev-dependencies]
+# Unfortunately, dev-dependencies cannot be optional
 rustre-parser-tests-codegen = { path = "../rustre-parser-tests-codegen" }
 
 [build-dependencies]
