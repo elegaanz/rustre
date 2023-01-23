@@ -118,7 +118,7 @@ pub fn lex(source: &str) -> Lexer {
 ///
 /// # Errors
 ///
-/// Thanks to the design of the parser, errors don't cause the entire parser to file, but are rather
+/// Thanks to the design of the parser, errors don't cause the entire parser to fail, but are rather
 /// accumulated in the list while the parser continues its jobs, doing the best it can to land back
 /// on its feet. For this reason, errors are returned in a tuple rather than with the usual
 /// [Result].
@@ -154,6 +154,29 @@ pub fn parse(source: &str) -> (ast::Root, Vec<ParserError>) {
             }],
         ),
     }
+}
+
+use salsa;
+mod db;
+
+#[salsa::jar(db = Db)]
+pub struct Jar(
+    // inputs
+    crate::db::SourceFile,
+    // queries
+    parse_file,
+);
+
+pub trait Db: salsa::DbWithJar<Jar> {}
+impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> {}
+
+pub fn driver() -> db::Database {
+    db::Database::default()
+}
+
+#[salsa::tracked]
+pub fn parse_file(db: &dyn crate::Db, file: crate::db::SourceFile) -> ast::Root {
+    parse(file.text(db)).0
 }
 
 #[cfg(all(test, feature = "tests-lustre-upstream"))]

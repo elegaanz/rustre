@@ -72,6 +72,15 @@ impl AstNode for IncludeStatement {
     }
 }
 
+impl IncludeStatement {
+    pub fn include(&self) -> Include {
+        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map(Include::cast).unwrap()
+    }
+    pub fn str(&self) -> Str {
+        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map(Str::cast).unwrap()
+    }
+}
+
 // ModelDeclNode
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -97,6 +106,12 @@ impl AstNode for ModelDeclNode {
     }
     fn expect(syntax: SyntaxNode) -> Self {
         Self::cast(syntax).expect("Failed to cast to ModelDeclNode")
+    }
+}
+
+impl ModelDeclNode {
+    pub fn model(&self) -> Model {
+        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map(Model::cast).unwrap()
     }
 }
 
@@ -128,6 +143,12 @@ impl AstNode for PackageDeclNode {
     }
 }
 
+impl PackageDeclNode {
+    pub fn package(&self) -> Package {
+        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map(Package::cast).unwrap()
+    }
+}
+
 // PackageAliasNode
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -153,6 +174,12 @@ impl AstNode for PackageAliasNode {
     }
     fn expect(syntax: SyntaxNode) -> Self {
         Self::cast(syntax).expect("Failed to cast to PackageAliasNode")
+    }
+}
+
+impl PackageAliasNode {
+    pub fn package(&self) -> Package {
+        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map(Package::cast).unwrap()
     }
 }
 
@@ -270,6 +297,12 @@ impl AstNode for ConstantDeclNode {
     }
 }
 
+impl ConstantDeclNode {
+    pub fn r#const(&self) -> Const {
+        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map(Const::cast).unwrap()
+    }
+}
+
 // TypeDeclNode
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -295,6 +328,12 @@ impl AstNode for TypeDeclNode {
     }
     fn expect(syntax: SyntaxNode) -> Self {
         Self::cast(syntax).expect("Failed to cast to TypeDeclNode")
+    }
+}
+
+impl TypeDeclNode {
+    pub fn r#type(&self) -> Type {
+        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map(Type::cast).unwrap()
     }
 }
 
