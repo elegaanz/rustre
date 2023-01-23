@@ -1,0 +1,43 @@
+image: "rust:latest"
+
+# Cache dependencies for faster builds
+# Taken from https://gitlab.com/yvan-sraka/rust-cache-example/-/blob/main/.gitlab-ci.yml
+cache:
+  key:
+    files:
+      - Cargo.lock
+  paths:
+    - /usr/local/cargo/bin
+    - /usr/local/cargo/registry/index
+    - /usr/local/cargo/registry/cache
+    - /usr/local/cargo/git/db
+    - ./target
+
+# Optional: Install a C compiler, cmake and git into the container.
+# You will often need this when you (or any of your dependencies) depends on C code.
+# before_script:
+#   - apt-get update -yqq
+#   - apt-get install -yqq --no-install-recommends build-essential
+
+# Use a third party library to generate gitlab junit reports
+test:junit-report:
+  before_script:
+    - cargo install junitify
+  script:
+    - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR/tests/
+  artifacts:
+    when: always
+    reports:
+      junit: $CI_PROJECT_DIR/tests/*.xml
+
+# Deploy rustdoc to GitLab pages
+pages:
+  only:
+    refs:
+      - main
+  script:
+    - cargo doc --verbose
+    - mv target/doc public
+  artifacts:
+    paths:
+      - public
