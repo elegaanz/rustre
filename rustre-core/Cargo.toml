@@ -1,0 +1,10 @@
+[package]
+name = "rustre-core"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+rustre-parser = { path = "../rustre-parser" }
+salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "20c7834ff34fd00a41b59bec61f3d5c85ea3abd4", package = "salsa-2022" }

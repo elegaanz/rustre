@@ -10,7 +10,7 @@ pub mod parser;
 
 // TODO extract to its own library
 #[doc(hidden)]
-mod rowan_nom;
+pub mod rowan_nom;
 
 use crate::lexer::{Lexer, Token};
 use crate::rowan_nom::RowanNomError;
@@ -154,29 +154,6 @@ pub fn parse(source: &str) -> (ast::Root, Vec<ParserError>) {
             }],
         ),
     }
-}
-
-use salsa;
-mod db;
-
-#[salsa::jar(db = Db)]
-pub struct Jar(
-    // inputs
-    crate::db::SourceFile,
-    // queries
-    parse_file,
-);
-
-pub trait Db: salsa::DbWithJar<Jar> {}
-impl<DB> Db for DB where DB: ?Sized + salsa::DbWithJar<Jar> {}
-
-pub fn driver() -> db::Database {
-    db::Database::default()
-}
-
-#[salsa::tracked]
-pub fn parse_file(db: &dyn crate::Db, file: crate::db::SourceFile) -> ast::Root {
-    parse(file.text(db)).0
 }
 
 #[cfg(all(test, feature = "tests-lustre-upstream"))]

@@ -589,6 +589,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "rustre-core"
+version = "0.1.0"
+dependencies = [
+ "rustre-parser",
+ "salsa-2022",
+]
+
+[[package]]
 name = "rustre-parser"
 version = "0.1.0"
 dependencies = [
@@ -598,7 +606,6 @@ dependencies = [
  "nom",
  "rowan",
  "rustre-parser-tests-codegen",
- "salsa-2022",
  "thiserror",
  "ungrammar",
 ]
