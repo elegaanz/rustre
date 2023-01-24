@@ -1,26 +1,35 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, collections::HashMap};
 
 use salsa;
 
-#[derive(Default)]
+use crate::SourceFile;
+
+/// The salsa database
 #[salsa::db(crate::Jar)]
 pub struct Database {
+    /// The salsa cache
     storage: salsa::Storage<Self>,
+    /// Files that are known by the compiler
+    files: HashMap<PathBuf, crate::SourceFile>,
 }
 
 impl salsa::Database for Database {}
 
 impl Database {
-    pub fn add_source_file(&self, path: PathBuf) {
-        let contents = std::fs::read_to_string(&path).unwrap(); // TODO: report the error
-        SourceFile::new(self, path, contents);
+    /// Creates a new compiler database
+    pub fn new() -> Self {
+        Database { storage: salsa::Storage::default(), files: HashMap::new() }
     }
-}
 
-#[salsa::input]
-pub struct SourceFile {
-    #[return_ref]
-    pub path: PathBuf,
-    #[return_ref]
-    pub text: String,
+    /// Adds a source file to the list of files that are known by the compiler
+    pub fn add_source_file(&mut self, path: PathBuf) {
+        let contents = std::fs::read_to_string(&path).unwrap(); // TODO: report the error
+        let file = SourceFile::new(self, path.clone(), contents);
+        self.files.insert(path, file);
+    }
+
+    /// Iterates over the files that the compiler knows about
+    pub fn files(&self) -> impl Iterator<Item = &SourceFile> {
+        self.files.values()
+    }
 }
