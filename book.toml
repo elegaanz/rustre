@@ -7,3 +7,7 @@ title = "Rustre"
 
 [preprocessor.git-links]
 command = 'python gitlinks.py'
+
+[preprocessor.plantuml]
+plantuml-cmd="https://www.plantuml.com/plantuml"
+use-data-uris=true

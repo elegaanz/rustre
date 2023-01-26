@@ -1,4 +1,4 @@
 { pkgs ? import <nixpkgs> {} }:
   pkgs.mkShell {
-    nativeBuildInputs = [ pkgs.mdbook ];
+    nativeBuildInputs = [ pkgs.mdbook pkgs.python3 ];
 }
