@@ -1,23 +1,75 @@
 // This file should not be read as a grammar, but rather as "what properties/children
 // a given node can have?"
 
+// === ProgramRules ===
+
 // For instance, in the actual grammar, it is mandatory that either PackageBody or
 // PackageList are present, but we want to consider them as optional properties
 // to generate two getters that return an Option<_>
-Root = IncludeStatement*
+Root = IncludeStatement* ConstantDeclNode* TypeDeclNode* ExternalNodeDeclNode* NodeNode* ModelDeclNode* PackageDeclNode* PackageAliasNode*
 
-IncludeStatement = 'include' 'str'
+IncludeStatement = 'str'
 
-ModelDeclNode = 'model' // TODO
-PackageDeclNode = 'package' // TODO
+// === PackageRules ===
+
+PackageDeclNode = 'package' IdNode UsesNode? ProvidesListNode? 'body'  'end' // TODO packbody
+UsesNode = 'uses' IdNode*
 PackageAliasNode = 'package' // TODO
 
-PackageDeclBody = OneDecl*
+// === ModelRules ===
 
-OneDecl = ConstantDeclNode | TypeDeclNode | NodeNode
+ProvidesListNode = 'provides' ProvidesNode*
+ProvidesNode = 'const'? // TODO
+ModelDeclNode = 'model' IdNode UsesNode? 'needs' 'semicolon' ProvidesListNode? 'body'  'end' // TODO packbody
 
-NodeNode = 'extern'? 'unsafe'? 'node'? 'function'? // TODO
+// === IdentRules ===
+
+IdNode = 'ident'
+
+// === NodesRules ===
+
+TypedIdsNode = 'ident'* 'comma'? 'colon' TypeNode
+NodeNode = 'unsafe'? 'node'? 'function'? IdNode 'static_params_node'? NodeProfileNode VarDeclNode* OneConstantDeclNode* BodyNode // TODO
+NodeProfileNode = 'returns' // Both the params Params and the return Params are `impl`emented in ast.rs
+ParamsNode = VarDeclNode*
+VarDeclNode = TypedIdsNode* ClockExpressionNode?
+
+// === ConstantDeclRules ===
 
 ConstantDeclNode = 'const' // TODO
+OneConstantDeclNode = IdNode* TypeNode ExpressionNode
 
-TypeDeclNode = 'type'
+// === TypeDeclRules ===
+
+TypeDeclNode = 'type' // TODO
+
+// === SimpleTypeRules ===
+
+TypeNode = 'bool'? 'int'? 'real'? IdNode? 'hat'? ExpressionNode?
+
+// === ExtNodesRules ===
+
+ExternalNodeDeclNode = 'unsafe'? 'extern'? 'node'? 'function'? IdNode NodeProfileNode
+
+// === StaticRules ===
+
+
+
+// === BodyRules ===
+
+BodyNode = EqualsEquationNode* AssertEquationNode*
+EqualsEquationNode = LeftNode 'equal' ExpressionNode
+AssertEquationNode = 'assert' ExpressionNode
+
+// === LeftRules ===
+
+LeftNode = 'equal'? // TODO
+
+// === ExpressionRules ===
+
+ExpressionNode = ConstantNode // TODO
+ClockExpressionNode = 'not'? // TODO
+
+// === ConstantRules ===
+
+ConstantNode = 'true'? 'false'? 'i_const'? 'r_const'?

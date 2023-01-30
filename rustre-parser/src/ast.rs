@@ -6,7 +6,9 @@
 //! [rowan's `SyntaxNode`][rowan::SyntaxNode] that provide useful specific getters for each node
 //! kind.
 
-mod generated;
+mod generated {
+    include!(concat!(env!("OUT_DIR"), "/ast_generated.rs"));
+}
 
 use crate::lexer::Token;
 use crate::{SyntaxNode, SyntaxToken};
@@ -60,5 +62,27 @@ pub trait AstToken {
 
     fn text(&self) -> &str {
         self.syntax().text()
+    }
+}
+
+// Additional methods that the build script can't generate
+
+impl NodeProfileNode {
+    pub fn params(&self) -> Option<ParamsNode> {
+        self.syntax
+            .children()
+            .next()
+            .filter(|s| s.kind() == Token::ParamsNode)
+            .map(|syntax| ParamsNode { syntax })
+    }
+
+    pub fn return_params(&self) -> Option<ParamsNode> {
+        self.syntax
+            .children_with_tokens()
+            .skip_while(|s| s.kind() != Token::Returns)
+            .find(|s| s.kind() == Token::ParamsNode)
+            .map(|syntax| ParamsNode {
+                syntax: syntax.into_node().unwrap(),
+            })
     }
 }

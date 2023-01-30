@@ -1,11 +1,14 @@
 use case::CaseExt;
 use std::{fs::File, io::Write};
+use std::path::PathBuf;
 use ungrammar::{Grammar, Rule};
 
 fn main() {
     println!("cargo:rerun-if-changed=lustre.ungram");
     let grammar = std::fs::read_to_string("lustre.ungram").unwrap();
-    let out = std::fs::File::create("src/ast/generated.rs").unwrap();
+
+    let out_path = PathBuf::from(std::env::var("OUT_DIR").unwrap()).join("ast_generated.rs");
+    let out = File::create(out_path).unwrap();
     let grammar: Grammar = grammar.parse().unwrap();
 
     Generator::new(out).generate(&grammar);
@@ -32,7 +35,7 @@ enum Adt {
 struct Struct {
     is_token: bool,
     unique_fields: Vec<(String, String, bool)>,
-    list_fields: Vec<(String, String)>,
+    list_fields: Vec<(String, String, bool)>,
     optional_fields: Vec<(String, String, bool)>,
     is_fields: Vec<(String, bool)>,
 }
@@ -71,7 +74,6 @@ impl Generator {
                         alternatives
                             .iter()
                             .map(|rule| {
-                                
                                 self.infer_name(grammar, &rule)
                             })
                             .collect(),
@@ -110,7 +112,7 @@ impl Generator {
             }
             Rule::Node(node) => {
                 let node_name = grammar[*node].name.clone();
-                current_struct.unique_fields.push((name, node_name, false));
+                current_struct.unique_fields.push((name.to_snake(), node_name, false));
             }
             Rule::Token(tok) => {
                 let tok_name = grammar[*tok].name.clone();
@@ -132,7 +134,7 @@ impl Generator {
                 Rule::Token(tok) => {
                     let ty_name = grammar[tok].name.clone().to_camel();
                     match &ty_name[..] {
-                        "Extern" | "Function" | "Node" | "Unsafe" => current_struct.is_fields.push((Self::translate_token(&name), true)),
+                        "Extern" | "Function" | "Node" | "Unsafe" | "True" | "False" => current_struct.is_fields.push((Self::translate_token(&name), true)),
                         _ => {},
                     }
                     current_struct.optional_fields.push((name.to_snake(), ty_name, true));
@@ -146,11 +148,11 @@ impl Generator {
             Rule::Rep(rule) => match **rule {
                 Rule::Node(node) => {
                     let ty_name = grammar[node].name.clone();
-                    current_struct.list_fields.push((name.to_snake(), ty_name));
+                    current_struct.list_fields.push((name.to_snake(), ty_name, false));
                 }
                 Rule::Token(tok) => {
-                    let ty_name = grammar[tok].name.clone();
-                    current_struct.list_fields.push((name.to_snake(), ty_name));
+                    let ty_name = grammar[tok].name.to_capitalized();
+                    current_struct.list_fields.push((name.to_snake(), ty_name, true));
                 }
                 Rule::Labeled { .. }
                 | Rule::Seq(_)
@@ -163,7 +165,7 @@ impl Generator {
     }
 
     fn write_header(&mut self) {
-        writeln!(self.out, "// Auto-generated file, do not edit manually.").ok();
+        writeln!(self.out, "// Auto-@generated file, do not edit manually.").ok();
         writeln!(
             self.out,
             "// If you want to make changes, either add a new impl block"
@@ -243,9 +245,13 @@ impl Generator {
                             }
                             writeln!(self.out, "    }}").ok();
                         }
-                        for (list_field, ty) in struc.list_fields {
+                        for (list_field, ty, is_token) in struc.list_fields {
                             writeln!(self.out, "    pub fn {}(&self) -> impl Iterator<Item = {}> {{", Self::unreserv(list_field), ty).ok();
-                            writeln!(self.out, "        self.syntax().children().filter_map({}::cast)", ty).ok();
+                            if is_token {
+                                writeln!(self.out, "        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).filter_map(|s| {}::cast(s))", ty).ok();
+                            } else {
+                                writeln!(self.out, "        self.syntax().children().filter_map({}::cast)", ty).ok();
+                            }
                             writeln!(self.out, "    }}").ok();
                         }
                         for (opt_field, ty, is_token) in struc.optional_fields {
@@ -258,11 +264,11 @@ impl Generator {
                             writeln!(self.out, "    }}").ok();
                         }
                         for (unique_field, ty, is_token) in struc.unique_fields {
-                            writeln!(self.out, "    pub fn {}(&self) -> {} {{", Self::unreserv(unique_field), ty).ok();
+                            writeln!(self.out, "    pub fn {}(&self) -> Option<{}> {{", Self::unreserv(unique_field.to_snake()), ty).ok();
                             if is_token {
-                                writeln!(self.out, "        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map({}::cast).unwrap()", ty).ok();
+                                writeln!(self.out, "        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map({}::cast)", ty).ok();
                             } else {
-                                writeln!(self.out, "        self.syntax().children().find_map({}::cast).unwrap()", ty).ok();
+                                writeln!(self.out, "        self.syntax().children().find_map({}::cast)", ty).ok();
                             }
                             writeln!(self.out, "    }}").ok();
                         }
@@ -333,7 +339,7 @@ impl Generator {
                         writeln!(
                             self.out,
                             "        if let {}::{}(data) = self {{ data }} else {{ panic!(\"Failed to unwrap {} as {}\") }}",
-                            kind, 
+                            kind,
                             name,
                             kind,
                             name,
@@ -351,7 +357,7 @@ impl Generator {
         match rule {
             Rule::Labeled { label, .. } => label.to_owned(),
             Rule::Node(node) => grammar[*node].name.to_owned(),
-            Rule::Token(tok) => grammar[*tok].name.to_owned(),
+            Rule::Token(tok) => grammar[*tok].name.to_capitalized(),
             Rule::Seq(s) => s
                 .iter()
                 .map(|r| self.infer_name(grammar, r))
@@ -377,7 +383,7 @@ impl Generator {
 
     fn unreserv(name: String) -> String {
         match &name[..] {
-            "extern" | "unsafe" | "const" | "type" => format!("r#{}", name),
+            "extern" | "unsafe" | "const" | "type" | "true" | "false" => format!("r#{}", name),
             _ => name,
         }
     }
