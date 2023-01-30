@@ -1,0 +1,4 @@
+format_generated_files = false
+ignore = [
+    "rustre-parser/build.rs"
+]

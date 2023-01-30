@@ -1,14 +1,17 @@
 use super::*;
 
 pub fn parse_provides<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    opt(many_delimited(
-        t(Provides),
-        join((
-            parse_provide,
-            expect(t(Semicolon), "provides must be separated by semicolons"),
-        )),
-        success,
-        peek(t(Body)),
+    opt(node(
+        ProvidesListNode,
+        many_delimited(
+            t(Provides),
+            join((
+                parse_provide,
+                expect(t(Semicolon), "provides must be separated by semicolons"),
+            )),
+            success,
+            peek(t(Body)),
+        ),
     ))(input)
 }
 

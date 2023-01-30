@@ -1,7 +1,10 @@
 use super::*;
 
 pub fn parse_type_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    join((t(Type), expect(parse_type_decls, "missing type name")))(input)
+    node(
+        TypeDeclNode,
+        join((t(Type), expect(parse_type_decls, "missing type name"))),
+    )(input)
 }
 
 pub fn parse_type_decls<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {

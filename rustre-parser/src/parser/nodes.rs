@@ -2,7 +2,7 @@ use super::*;
 
 pub fn parse_typed_lv6_ids<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
     node(
-        TypedLv6IdsNode,
+        TypedIdsNode,
         join((
             ident::parse_lv6_id,
             many0(join((
@@ -84,22 +84,25 @@ pub fn parse_node_type<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sli
 ///
 /// Either the first `〈Params〉` or the `returns` token must be present for the parser not to fail.
 pub fn parse_params_and_returns<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    alt((
-        join((
-            parse_params,
-            expect(t(Returns), "expected `returns` after params"),
-            expect(parse_params, "expected `(params...)` after `returns`"),
+    node(
+        NodeProfileNode,
+        alt((
+            join((
+                parse_params,
+                expect(t(Returns), "expected `returns` after params"),
+                expect(parse_params, "expected `(params...)` after `returns`"),
+            )),
+            // if the user forgot the first params, we can still attempt to parse using the `returns`
+            // token
+            join((
+                // FIXME: define a parser that immediately fails instead of attempting to parse
+                //        something we already know is missing
+                expect(parse_params, "missing params before `returns`"),
+                t(Returns),
+                expect(parse_params, "expected `(params...)` after `returns`"),
+            )),
         )),
-        // if the user forgot the first params, we can still attempt to parse using the `returns`
-        // token
-        join((
-            // FIXME: define a parser that immediately fails instead of attempting to parse
-            //        something we already know is missing
-            expect(parse_params, "missing params before `returns`"),
-            t(Returns),
-            expect(parse_params, "expected `(params...)` after `returns`"),
-        )),
-    ))(input)
+    )(input)
 }
 
 /// Parses the end of a `NodeDecl`, where a definition is expected
@@ -189,7 +192,7 @@ pub fn parse_local_vars<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
 }
 
 pub fn parse_var_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    alt((
+    node(VarDeclNode, alt((
         join((parse_typed_lv6_ids, opt(join((
             t(When),
             expect(expression::parse_clock_expr, "expected clock expression"),
@@ -199,5 +202,5 @@ pub fn parse_var_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slic
             expect(t(When), "expected `when` to complete clock expression, remove previous parenthesis if you didn't mean to start a clock expression"),
             expect(expression::parse_clock_expr, "expected clock expression"),
         )),
-    ))(input)
+    )))(input)
 }

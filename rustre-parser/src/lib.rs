@@ -7,6 +7,7 @@
 pub mod ast;
 pub mod lexer;
 pub mod parser;
+mod ast_tests;
 
 // TODO extract to its own library
 #[doc(hidden)]

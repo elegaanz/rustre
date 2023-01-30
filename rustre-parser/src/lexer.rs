@@ -295,6 +295,7 @@ pub enum Token {
     UsesNode,
 
     // Ebnf group ModelRules
+    ProvidesListNode,
     ProvidesNode,
     ModelDeclNode,
 
@@ -303,10 +304,12 @@ pub enum Token {
     PragmaNode,
 
     // Ebnf group NodesRules
-    TypedLv6IdsNode,
+    TypedIdsNode,
     TypedValuedLv6IdNode,
     NodeNode,
+    NodeProfileNode,
     ParamsNode,
+    VarDeclNode,
 
     // Ebnf group ConstantDeclRules
     ConstantDeclNode,
