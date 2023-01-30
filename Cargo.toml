@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "rustre-ast-dump",
+    "rustre-cli",
     "rustre-parser",
     "rustre-parser-tests-codegen",
 ]

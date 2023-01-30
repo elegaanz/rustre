@@ -1,11 +1,14 @@
 [package]
-name = "rustre-ast-dump"
+name = "rustre-cli"
 version = "0.1.0"
 edition = "2021"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "rustre"
+path = "src/main.rs"
 
 [dependencies]
 ariadne = "0.1"
 rustre-parser = { path = "../rustre-parser" }
 rowan = "0.15.5"
+clap = {version = "4.1.1", features = ["derive"]}
