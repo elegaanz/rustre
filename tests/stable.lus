@@ -1,0 +1,5 @@
+-- This file should not be modified, some unit tests depend on it
+
+include "test.lus"
+
+const x = 12;
