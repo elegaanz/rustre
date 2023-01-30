@@ -1,10 +1,8 @@
-use std::ops::Range;
-use std::path::Path;
+use std::{ops::Range, path::PathBuf};
 
-use ariadne::{Label, Report, ReportKind, Span};
+use ariadne::{Label, Report, ReportKind};
 use rowan::NodeOrToken;
-use rustre_parser::ast::AstNode;
-use rustre_parser::{lexer::Token, SyntaxNode, SyntaxToken};
+use rustre_parser::{lexer::Token, SyntaxNode, SyntaxToken, ast::AstNode};
 use clap::{Parser, Subcommand};
 
 #[derive(Parser)]
@@ -30,16 +28,22 @@ fn main() -> Result<(), u8> {
         Commands::Ast { file } => {
             match file {
                 Some(filename) => {
-                    let path = Path::new(filename);
-                    let mut contents = std::fs::read_to_string(path).unwrap();
-                    // Remove when comments as last tokens are properly parsed
-                    if !contents.ends_with('\n') {
-                        contents += "\n";
+                    let path = PathBuf::from(filename);
+
+                    // TODO: there is a bug in logos, the last token is not always
+                    // properly parsed when there is a missing line break at the end
+                    // of the file
+
+                    let mut driver = rustre_core::driver();
+                    driver.add_source_file(path);
+                    for file in driver.files() {
+                        let ast = rustre_core::parse_file(&driver, *file);
+                        let root = ast.root(&driver);
+                        print(0, NodeOrToken::Node(root.syntax().clone()));
                     }
-                    let (root, errors) = rustre_parser::parse(&contents);
-                    print(0, NodeOrToken::Node(root.syntax().clone()));
-                
-                    let no_errors = errors.is_empty();
+
+                    // TODO: re-introduce error handling when they are reported with salsa
+                    /*let no_errors = errors.is_empty();
                 
                     for err in errors {
                         Report::<(String, Range<usize>)>::build(ReportKind::Error, filename.clone(), err.span.start())
@@ -54,7 +58,8 @@ fn main() -> Result<(), u8> {
                         Ok(())
                     } else {
                         Err(1)
-                    }
+                    }*/
+                    Ok(())
                 }
                 None => {
                     println!("Missing argument : file");

@@ -118,7 +118,7 @@ pub fn lex(source: &str) -> Lexer {
 ///
 /// # Errors
 ///
-/// Thanks to the design of the parser, errors don't cause the entire parser to file, but are rather
+/// Thanks to the design of the parser, errors don't cause the entire parser to fail, but are rather
 /// accumulated in the list while the parser continues its jobs, doing the best it can to land back
 /// on its feet. For this reason, errors are returned in a tuple rather than with the usual
 /// [Result].

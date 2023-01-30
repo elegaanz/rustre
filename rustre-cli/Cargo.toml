@@ -9,6 +9,7 @@ path = "src/main.rs"
 
 [dependencies]
 ariadne = "0.1"
+rustre-core = { path = "../rustre-core" }
 rustre-parser = { path = "../rustre-parser" }
 rowan = "0.15.5"
 clap = {version = "4.1.1", features = ["derive"]}
