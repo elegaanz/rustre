@@ -585,6 +585,7 @@ dependencies = [
  "ariadne",
  "clap",
  "rowan",
+ "rustre-core",
  "rustre-parser",
 ]
 
