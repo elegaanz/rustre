@@ -10,7 +10,7 @@ pub mod parser;
 
 // TODO extract to its own library
 #[doc(hidden)]
-pub mod rowan_nom;
+mod rowan_nom;
 
 use crate::lexer::{Lexer, Token};
 use crate::rowan_nom::RowanNomError;
