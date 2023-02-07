@@ -8,6 +8,7 @@ use std::path::PathBuf;
 
 use salsa;
 mod db;
+mod types;
 
 /// This structure is used to give Salsa all the information
 /// it needs to build our query system
