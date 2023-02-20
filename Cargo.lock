@@ -579,5 +579,6 @@ checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 
 [[package]]
 name = "yeter"
-version = "0.1.0"
-source = "git+https://github.com/elegaanz/yeter?rev=2ce2656d6523106964da31d9831c93778e38a0de#2ce2656d6523106964da31d9831c93778e38a0de"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd0dad31113269036d42bd898ad48455f319b0687979e8fc1acf7ce0b87998fb"

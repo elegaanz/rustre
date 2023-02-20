@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 rustre-parser = { path = "../rustre-parser" }
-yeter = { git = "https://github.com/elegaanz/yeter", rev = "2ce2656d6523106964da31d9831c93778e38a0de" }
+yeter = "0.2.0"

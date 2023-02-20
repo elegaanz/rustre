@@ -35,11 +35,11 @@ fn main() -> Result<(), u8> {
                     // of the file
 
                     let mut driver = rustre_core::driver();
-                    driver.add_source_file(path);
-                    for file in driver.files() {
-                        let ast = rustre_core::parse_file(&driver, *file);
-                        let root = ast.root(&driver);
-                        print(0, NodeOrToken::Node(root.syntax().clone()));
+                    rustre_core::add_source_file(&mut driver, path);
+                    for file in &*rustre_core::files::files::query(&driver, ()) {
+                        dbg!(&file.path);
+                        let ast = rustre_core::parse_file(&driver, file);
+                        print(0, NodeOrToken::Node(ast.syntax().clone()));
                     }
 
                     // TODO: re-introduce error handling when they are reported with salsa
