@@ -350,6 +350,7 @@ pub enum Token {
 
     // Ebnf group ExpressionRules
     ExpressionNode,
+    ExpressionListNode,
 
     ParExpressionNode,
     ArrayLiteralExpressionNode,
@@ -403,6 +404,7 @@ pub enum Token {
     ConcatExpressionNode,
 
     IfExpressionNode,
+    WithExpressionNode,
 
     ClockExpressionNode,
 

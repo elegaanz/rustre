@@ -24,7 +24,8 @@ ModelDeclNode = 'model' IdNode UsesNode? 'needs' 'semicolon' ProvidesListNode? '
 
 // === IdentRules ===
 
-IdNode = 'ident'
+IdNode = 'ident' PragmaNode?
+PragmaNode = 'percent'* 'ident'* 'colon'
 
 // === NodesRules ===
 
@@ -36,12 +37,17 @@ VarDeclNode = TypedIdsNode* ClockExpressionNode?
 
 // === ConstantDeclRules ===
 
-ConstantDeclNode = 'const' // TODO
-OneConstantDeclNode = IdNode* TypeNode ExpressionNode
+ConstantDeclNode = 'const' OneConstantDeclNode*
+// ConstantDeclListNode = OneConstantDeclNode OneConstantDeclNode*
+OneConstantDeclNode = IdNode* TypeNode? ExpressionNode?
+// OneConstantDeclNode = IdNode (TypeNode | IdNode IdNode* TypeNode | TypeNode ExpressionNode | ExpressionNode)
 
 // === TypeDeclRules ===
 
-TypeDeclNode = 'type' // TODO
+TypeDeclNode = 'type' OneTypeDeclNode*
+OneTypeDeclNode = IdNode TypeNode? EnumDeclNode? StructDeclNode?
+EnumDeclNode = 'enum' IdNode*
+StructDeclNode = 'struct' // TODO
 
 // === SimpleTypeRules ===
 
@@ -68,7 +74,38 @@ LeftNode = 'equal'? // TODO
 // === ExpressionRules ===
 
 ExpressionNode = ConstantNode // TODO
-ClockExpressionNode = 'not'? // TODO
+ClockExpressionNode = 'not'? IdNode // TODO
+ExpressionListNode = ExpressionNode*
+
+NotExpressionNode = 'not' ExpressionNode
+NegExpressionNode = 'minus' ExpressionNode
+PreExpressionNode = 'pre' ExpressionNode
+CurrentExpressionNode = 'current' ExpressionNode
+IntExpressionNode = 'int' ExpressionNode
+RealExpressionNode = 'real' ExpressionNode
+WhenExpressionNode = left:ExpressionNode 'when' right:ExpressionNode
+FbyExpressionNode = left:ExpressionNode 'f_by' right:ExpressionNode
+ArrowExpressionNode = left:ExpressionNode 'arrow' right:ExpressionNode
+AndExpressionNode = left:ExpressionNode 'and' right:ExpressionNode
+OrExpressionNode = left:ExpressionNode 'or' right:ExpressionNode
+XorExpressionNode = left:ExpressionNode 'xor' right:ExpressionNode
+ImplExpressionNode = left:ExpressionNode 'impl' right:ExpressionNode
+EqExpressionNode = left:ExpressionNode 'equal' right:ExpressionNode
+NeqExpressionNode = left:ExpressionNode 'neq' right:ExpressionNode
+LtExpressionNode = left:ExpressionNode 'lt' right:ExpressionNode
+LteExpressionNode = left:ExpressionNode 'lte' right:ExpressionNode
+GtExpressionNode = left:ExpressionNode 'gt' right:ExpressionNode
+GteExpressionNode = left:ExpressionNode 'gte' right:ExpressionNode
+DivExpressionNode = left:ExpressionNode 'div'? 'slash'? right:ExpressionNode
+ModExpressionNode = left:ExpressionNode 'mod' right:ExpressionNode
+SubExpressionNode = left:ExpressionNode 'minus' right:ExpressionNode
+AddExpressionNode = left:ExpressionNode 'plus' right:ExpressionNode
+MulExpressionNode = left:ExpressionNode 'star' right:ExpressionNode
+PowerExpressionNode = left:ExpressionNode 'power' right:ExpressionNode
+IfExpressionNode = 'if' cond:ExpressionNode 'then' if_body:ExpressionNode 'else' else_body:ExpressionNode
+WithExpressionNode = 'with' cond:ExpressionNode 'then' with_body:ExpressionNode 'else' else_body:ExpressionNode
+DieseExpressionNode = 'diese' ExpressionListNode
+NorExpressionNode = 'nor' ExpressionListNode
 
 // === ConstantRules ===
 
