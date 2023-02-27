@@ -2,7 +2,6 @@ use std::path::PathBuf;
 
 use clap::{Parser, Subcommand};
 use rowan::NodeOrToken;
-use rustre_core::node_graph::NodeGraphBuilder;
 use rustre_parser::{ast::AstNode, lexer::Token, SyntaxNode, SyntaxToken};
 
 #[derive(Parser)]
@@ -88,8 +87,7 @@ fn main() -> Result<(), u8> {
             for file in &*rustre_core::files::files::query(&driver, ()) {
                 let root = rustre_core::parse_file(&driver, file);
                 for node in root.all_node_node() {
-                    let mut builder = NodeGraphBuilder::default();
-                    let graph = builder.try_parse_node_graph(&node);
+                    let graph = &*rustre_core::graph::build_node_graph::query(&driver, node);
                     println!("{graph}");
                 }
             }

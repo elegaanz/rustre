@@ -74,7 +74,7 @@ LeftItemNode = IdNode? // TODO
 
 // === ExpressionRules ===
 
-ExpressionNode = ConstantNode? IdentExpressionNode? ParExpressionNode?
+ExpressionNode = ConstantNode? IdentExpressionNode? ParExpressionNode? NotExpressionNode? NegExpressionNode? PreExpressionNode? CurrentExpressionNode? IntExpressionNode? RealExpressionNode? WhenExpressionNode? FbyExpressionNode? ArrowExpressionNode? AndExpressionNode? OrExpressionNode? XorExpressionNode?        AddExpressionNode? // TODO impl
 IdentExpressionNode = IdNode
 ParExpressionNode = ExpressionNode
 ClockExpressionNode = 'not'? IdNode // TODO

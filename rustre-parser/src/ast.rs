@@ -86,3 +86,42 @@ impl NodeProfileNode {
             })
     }
 }
+
+pub trait BinaryExpression {
+    fn left(&self) -> Option<ExpressionNode>;
+    fn right(&self) -> Option<ExpressionNode>;
+}
+
+macro_rules! impl_bin_expr {
+    ($name:ident) => {
+        impl BinaryExpression for $name {
+            fn left(&self) -> Option<ExpressionNode> {
+                $name::left(self)
+            }
+
+            fn right(&self) -> Option<ExpressionNode> {
+                $name::right(self)
+            }
+        }
+    };
+}
+
+impl_bin_expr!(WhenExpressionNode);
+impl_bin_expr!(FbyExpressionNode);
+impl_bin_expr!(ArrowExpressionNode);
+impl_bin_expr!(AndExpressionNode);
+impl_bin_expr!(OrExpressionNode);
+impl_bin_expr!(XorExpressionNode);
+impl_bin_expr!(ImplExpressionNode);
+impl_bin_expr!(EqExpressionNode);
+impl_bin_expr!(NeqExpressionNode);
+impl_bin_expr!(LtExpressionNode);
+impl_bin_expr!(LteExpressionNode);
+impl_bin_expr!(GtExpressionNode);
+impl_bin_expr!(GteExpressionNode);
+impl_bin_expr!(DivExpressionNode);
+impl_bin_expr!(ModExpressionNode);
+impl_bin_expr!(SubExpressionNode);
+impl_bin_expr!(AddExpressionNode);
+impl_bin_expr!(MulExpressionNode);
+impl_bin_expr!(PowerExpressionNode);

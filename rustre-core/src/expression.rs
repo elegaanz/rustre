@@ -1,4 +1,4 @@
-use rustre_parser::ast::{AstNode, AstToken, ConstantNode, ExpressionNode};
+use rustre_parser::ast::{AstToken, BinaryExpression, ConstantNode, ExpressionNode};
 use rustre_parser::SyntaxNode;
 
 /// A non-type-checked expression tree
@@ -28,32 +28,26 @@ pub enum BakedExpression {
 impl BakedExpression {
     pub fn bake(node: ExpressionNode) -> Result<Self, &'static str> {
         if let Some(constant) = node.constant_node() {
-            return Self::bake_literal(constant);
-        }
-
-        if let Some(expr_id_node) = node.ident_expression_node() {
+            Self::bake_literal(constant)
+        } else if let Some(expr_id_node) = node.ident_expression_node() {
             let id_node = expr_id_node.id_node().unwrap();
-            return Ok(Self::Identifier(id_node.ident().unwrap().text().into()));
-        }
-
-        if let Some(paren) = node.par_expression_node() {
-            return if let Some(inner_expr) = paren.expression_node() {
+            Ok(Self::Identifier(id_node.ident().unwrap().text().into()))
+        } else if let Some(paren) = node.par_expression_node() {
+            if let Some(inner_expr) = paren.expression_node() {
                 Ok(Self::Parenthesised(Box::new(Self::bake(inner_expr)?))) // TODO Error
             } else {
                 Err("expected expression inside parenthesis")
-            };
-        }
-
-        let node = node.syntax();
-        let inner = node.children().next().expect("nothing inside"); // TODO
-
-        use rustre_parser::lexer::Token::*;
-        match inner.kind() {
-            AddExpressionNode => Self::bake_binary(Self::Add, &inner),
-            XorExpressionNode => Self::bake_binary(Self::Xor, &inner),
-            OrExpressionNode => Self::bake_binary(Self::Or, &inner),
-            AndExpressionNode => Self::bake_binary(Self::And, &inner),
-            other => unimplemented!("unknown expression token {other:?}"),
+            }
+        } else if let Some(node) = node.and_expression_node() {
+            Self::bake_binary(Self::And, &node)
+        } else if let Some(node) = node.or_expression_node() {
+            Self::bake_binary(Self::Or, &node)
+        } else if let Some(node) = node.xor_expression_node() {
+            Self::bake_binary(Self::Xor, &node)
+        } else if let Some(node) = node.add_expression_node() {
+            Self::bake_binary(Self::Add, &node)
+        } else {
+            unimplemented!("unknown expression token {node:?}")
         }
     }
 
@@ -73,27 +67,9 @@ impl BakedExpression {
 
     fn bake_binary(
         factory: fn(Box<Self>, Box<Self>) -> Self,
-        syntax: &SyntaxNode,
+        expr: &impl BinaryExpression,
     ) -> Result<Self, &'static str> {
-        let mut op1 = None;
-        let mut operator = None;
-        let mut op2 = None;
-
-        for child in syntax
-            .children_with_tokens()
-            .filter(|c| c.kind().is_non_trivia())
-            .take(3)
-        {
-            let expr = child.as_node().cloned().and_then(ExpressionNode::cast);
-
-            match (expr, operator.is_none()) {
-                (Some(expr), true) => assert!(op1.replace(expr).is_none()),
-                (Some(expr), false) => assert!(op2.replace(expr).is_none()),
-                _ => assert!(operator.replace(child).is_none()),
-            }
-        }
-
-        match (op1, op2) {
+        match (expr.left(), expr.right()) {
             (Some(op1), Some(op2)) => Ok(factory(
                 // FIXME maybe insert Error instead of failing
                 Box::new(Self::bake(op1)?),

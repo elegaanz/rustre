@@ -10,6 +10,7 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 
 // FIXME this error type is bad
+#[derive(Debug)]
 pub enum Error {
     Unsupported(&'static str, SyntaxNode),
     DuplicateVar(Ident),
@@ -80,7 +81,7 @@ impl NodeGraph {
 
 #[derive(Default)]
 pub struct NodeGraphBuilder {
-    errors: Vec<Error>,
+    pub errors: Vec<Error>,
 
     /// Local variables, including parameters and return variables
     local_vars: HashSet<String>,
