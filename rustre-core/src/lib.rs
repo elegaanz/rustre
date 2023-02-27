@@ -2,12 +2,13 @@
 //!
 //! It is built around [salsa].
 
-use std::path::PathBuf;
+pub mod expression;
+pub mod node_graph;
+mod types;
 
 use rustre_parser::ast::Root;
+use std::path::PathBuf;
 use yeter;
-
-mod types;
 
 /// Builds a new compiler driver, that corresponds to a compilation session.
 ///
@@ -20,9 +21,7 @@ pub fn driver() -> yeter::Database {
         let (root, _errors) = rustre_parser::parse(&source);
         root
     });
-    db.register::<_, files::files::Query>(|_db, ()| {
-        vec![]
-    }); 
+    db.register::<_, files::files::Query>(|_db, ()| vec![]);
     db
 }
 
@@ -46,7 +45,10 @@ pub struct SourceFile {
 
 impl SourceFile {
     fn new(path: PathBuf, text: String) -> SourceFile {
-        SourceFile { path: path, text: text }
+        SourceFile {
+            path: path,
+            text: text,
+        }
     }
 }
 
@@ -69,7 +71,6 @@ pub fn add_source_file(db: &mut yeter::Database, path: PathBuf) {
         files.clone() // TODO: find a way to not clone?
     })
 }
-
 
 #[cfg(test)]
 mod tests {

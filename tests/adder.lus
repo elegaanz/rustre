@@ -1,0 +1,5 @@
+function add (a, b, cin : bool) returns (s, cout : bool);
+let
+    s = (a xor b) xor cin;
+    cout = (a and b) or (cin and (a xor b));
+tel;
