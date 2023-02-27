@@ -7,4 +7,4 @@ edition = "2021"
 
 [dependencies]
 rustre-parser = { path = "../rustre-parser" }
-salsa = { git = "https://github.com/salsa-rs/salsa.git", rev = "20c7834ff34fd00a41b59bec61f3d5c85ea3abd4", package = "salsa-2022" }
+yeter = "0.2.0"
