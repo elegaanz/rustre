@@ -383,7 +383,7 @@ impl Generator {
 
     fn unreserv(name: String) -> String {
         match &name[..] {
-            "extern" | "unsafe" | "const" | "type" | "true" | "false" => format!("r#{}", name),
+            "extern" | "unsafe" | "const" | "type" | "true" | "false" | "enum" | "struct" | "impl" | "if" | "else" | "mod" => format!("r#{}", name),
             _ => name,
         }
     }
