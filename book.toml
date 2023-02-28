@@ -1,9 +1,21 @@
 [book]
-authors = ["Ana Gelez"]
-language = "en"
+authors = ["Ana Gelez", "Edgar Onghena"]
+language = "fr"
 multilingual = false
 src = "src"
 title = "Rustre"
+
+[output.katex]
+
+[output.html]
+additional-js = ["theme/highlight-lustre.js"]
+git-repository-url = "https://gricad-gitlab.univ-grenoble-alpes.fr/Projets-INFO4/22-23/26/docs"
+git-repository-icon = "fa-gitlab"
+edit-url-template = "https://gricad-gitlab.univ-grenoble-alpes.fr/-/ide/project/Projets-INFO4/22-23/26/docs/edit/docs/-/{path}"
+
+[preprocessor.katex]
+renderers = ["html"]
+macros = "katex-macros.txt"
 
 [preprocessor.git-links]
 command = 'python gitlinks.py'
