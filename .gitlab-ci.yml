@@ -1,8 +1,8 @@
-image: peaceiris/mdbook:latest
+image: alpine:latest
 
 pages:
     script:
-    - apk add dash
+    - apk add mdbook
     - mdbook build --d public
     artifacts:
         paths:
