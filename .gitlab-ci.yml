@@ -2,7 +2,7 @@ image: peaceiris/mdbook:latest
 
 pages:
     script:
-    - apk add bash
+    - apk add dash
     - mdbook build --d public
     artifacts:
         paths:
