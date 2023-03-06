@@ -1,9 +1,8 @@
-use std::{ops::Range, path::PathBuf};
+use std::path::PathBuf;
 
-use ariadne::{Label, Report, ReportKind};
-use rowan::NodeOrToken;
-use rustre_parser::{lexer::Token, SyntaxNode, SyntaxToken, ast::AstNode};
 use clap::{Parser, Subcommand};
+use rowan::NodeOrToken;
+use rustre_parser::{ast::AstNode, lexer::Token, SyntaxNode, SyntaxToken};
 
 #[derive(Parser)]
 #[command(author, version, about, long_about = None)]
@@ -16,9 +15,23 @@ struct Cli {
 #[derive(Subcommand)]
 enum Commands {
     // Dumps AST generated from file
-    Ast { file: Option<String> },
+    Ast {
+        file: Option<String>,
+    },
+
+    /// Generate a Graphviz graph for a given node
+    Dot {
+        file: PathBuf,
+
+        /// Node to display as a graph
+        #[clap(long, short)]
+        node: String,
+    },
+
     // Compiles file
-    Build { file: Option<String> },
+    Build {
+        file: Option<String>,
+    },
 }
 
 fn main() -> Result<(), u8> {
@@ -44,7 +57,7 @@ fn main() -> Result<(), u8> {
 
                     // TODO: re-introduce error handling when they are reported with salsa
                     /*let no_errors = errors.is_empty();
-                
+
                     for err in errors {
                         Report::<(String, Range<usize>)>::build(ReportKind::Error, filename.clone(), err.span.start())
                             .with_message(err.msg)
@@ -53,7 +66,7 @@ fn main() -> Result<(), u8> {
                             .print(ariadne::sources(vec![(filename.clone(), &contents)]))
                             .unwrap();
                     }
-                
+
                     if no_errors {
                         Ok(())
                     } else {
@@ -64,21 +77,33 @@ fn main() -> Result<(), u8> {
                 None => {
                     println!("Missing argument : file");
                     Err(1)
-                }     
-            }
-        }
-        Commands::Build { file } => {
-            match file {
-                Some(_filename) => {
-                    println!("Ça construit un compilateur ou quoi ?? (PAS ENCORE PRÊT)");
-                    Ok(())
-                }
-                None => {
-                    println!("Missing argument : file");
-                    Err(1)
                 }
             }
         }
+        Commands::Dot { file, node } => {
+            let mut driver = rustre_core::driver();
+            rustre_core::add_source_file(&mut driver, file.clone());
+
+            for file in &*rustre_core::files::files::query(&driver, ()) {
+                let root = rustre_core::parse_file(&driver, file);
+                for node in root.all_node_node() {
+                    let graph = &*rustre_core::graph::build_node_graph::query(&driver, node);
+                    println!("{graph}");
+                }
+            }
+
+            Ok(())
+        }
+        Commands::Build { file } => match file {
+            Some(_filename) => {
+                println!("Ça construit un compilateur ou quoi ?? (PAS ENCORE PRÊT)");
+                Ok(())
+            }
+            None => {
+                println!("Missing argument : file");
+                Err(1)
+            }
+        },
     }
 }
 

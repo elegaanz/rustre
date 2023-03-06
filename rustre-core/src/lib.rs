@@ -2,12 +2,13 @@
 //!
 //! It is built around [salsa].
 
-use std::path::PathBuf;
-
-use rustre_parser::ast::Root;
-use yeter;
-
+pub mod expression;
+pub mod node_graph;
 mod types;
+
+use node_graph::{NodeGraph, NodeGraphBuilder};
+use rustre_parser::ast::{NodeNode, Root};
+use std::path::PathBuf;
 
 /// Builds a new compiler driver, that corresponds to a compilation session.
 ///
@@ -20,9 +21,21 @@ pub fn driver() -> yeter::Database {
         let (root, _errors) = rustre_parser::parse(&source);
         root
     });
-    db.register::<_, files::files::Query>(|_db, ()| {
-        vec![]
-    }); 
+    db.register::<_, files::files::Query>(|_db, ()| vec![]);
+    db.register::<_, graph::build_node_graph::Query>(|_db, node| {
+        let mut builder = NodeGraphBuilder::default();
+        let graph = builder.try_parse_node_graph(&node);
+
+        if !builder.errors.is_empty() {
+            // TODO: report errors
+            eprint!(
+                "yeter doesn't support error reporting but we got these: {:?}",
+                &builder.errors
+            );
+        }
+
+        graph
+    });
     db
 }
 
@@ -32,6 +45,9 @@ yeter::queries! {
     },
     files {
         files: (): Vec<crate::SourceFile>
+    },
+    graph {
+        build_node_graph: rustre_parser::ast::NodeNode: crate::node_graph::NodeGraph
     }
 }
 
@@ -46,7 +62,10 @@ pub struct SourceFile {
 
 impl SourceFile {
     fn new(path: PathBuf, text: String) -> SourceFile {
-        SourceFile { path: path, text: text }
+        SourceFile {
+            path: path,
+            text: text,
+        }
     }
 }
 
@@ -69,7 +88,6 @@ pub fn add_source_file(db: &mut yeter::Database, path: PathBuf) {
         files.clone() // TODO: find a way to not clone?
     })
 }
-
 
 #[cfg(test)]
 mod tests {

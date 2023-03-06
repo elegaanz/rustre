@@ -343,6 +343,7 @@ pub enum Token {
 
     // Ebnf group LeftRules
     LeftNode,
+    LeftItemNode,
     LeftFieldAccessNode,
     LeftTableAccessNode,
     SelectNode,

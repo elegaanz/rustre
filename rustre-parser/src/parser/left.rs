@@ -11,26 +11,29 @@ pub fn parse_left<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, '
 }
 
 pub fn parse_left_item<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    fold_many1(
-        ident::parse_id_any,
-        alt((
-            map(join((t(Dot), ident::parse_id_any)), |c| {
-                (c, LeftFieldAccessNode)
-            }),
-            map(
-                many_delimited(
-                    t(OpenBracket),
-                    expect(
-                        alt((parse_select, expression::parse_expression)),
-                        "expected expression or select",
+    node(
+        LeftItemNode,
+        fold_many1(
+            ident::parse_id_any,
+            alt((
+                map(join((t(Dot), ident::parse_id_any)), |c| {
+                    (c, LeftFieldAccessNode)
+                }),
+                map(
+                    many_delimited(
+                        t(OpenBracket),
+                        expect(
+                            alt((parse_select, expression::parse_expression)),
+                            "expected expression or select",
+                        ),
+                        eof,
+                        t(CloseBracket),
                     ),
-                    eof,
-                    t(CloseBracket),
+                    |c| (c, LeftTableAccessNode),
                 ),
-                |c| (c, LeftTableAccessNode),
-            ),
-        )),
-        |a, (b, n)| (a + b).into_node(n),
+            )),
+            |a, (b, n)| (a + b).into_node(n),
+        ),
     )(input)
 }
 
