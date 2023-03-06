@@ -1,9 +1,8 @@
-image: alpine:latest
+image: nixos/nix:latest
 
 pages:
     script:
-    - apk add mdbook python3
-    - mdbook build -d public
+    - nix-shell --run 'mdbook build -d public'
     artifacts:
         paths:
         - public
