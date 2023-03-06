@@ -3,7 +3,7 @@ image: alpine:latest
 pages:
     script:
     - apk add mdbook
-    - mdbook build --d public
+    - mdbook build -d public
     artifacts:
         paths:
         - public
