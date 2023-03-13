@@ -9,7 +9,13 @@
 - [Vue d'ensemble](architecture/overview.md)
 - [Lexeur (logos)](architecture/logos.md)
 - [Parseur (rowan + nom + ungrammar)](architecture/parsing.md)
-- [Queries (salsa)]()
+- [Queries (yéter)]()
+
+# Type-checking
+
+1. [Graphe non typé]()
+2. [Type-checking]()
+3. [Vérification de l'initialisation](typechecking/initialization.md)
 
 # Annexes
 
