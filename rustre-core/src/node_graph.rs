@@ -8,6 +8,7 @@ use rustre_parser::SyntaxNode;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
+use std::hash::{Hash, Hasher};
 
 // FIXME this error type is bad
 #[derive(Debug)]
@@ -40,6 +41,19 @@ pub enum Expression {
     And,
 }
 
+impl Hash for Expression {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        std::mem::discriminant(self).hash(state);
+        match self {
+            Self::LiteralInt(v) => v.hash(state),
+            Self::LiteralReal(v) => v.to_ne_bytes().hash(state),
+            Self::LiteralBool(v) => v.hash(state),
+            Self::TupleElement(v) => v.hash(state),
+            _ => (),
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct NodeGraph {
     /// Direct graph of expressions, connected by an operand index
@@ -47,6 +61,29 @@ pub struct NodeGraph {
 
     /// Mapping of variable/parameter names to graph node ID
     bindings: BiMap<String, NodeIndex<u32>>,
+}
+
+// Probably very bad but it should be ok for the moment
+impl Hash for NodeGraph {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        for node in self.graph.raw_nodes() {
+            node.weight.hash(state);
+        }
+
+        for edge in self
+            .graph
+            .edge_indices()
+            .zip(self.graph.edge_weights())
+            .enumerate()
+        {
+            edge.hash(state);
+            self.graph.edge_endpoints(edge.1 .0).hash(state);
+        }
+
+        for binding in &self.bindings {
+            binding.hash(state);
+        }
+    }
 }
 
 impl Display for NodeGraph {
