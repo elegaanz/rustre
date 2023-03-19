@@ -9,46 +9,17 @@ mod types;
 use node_graph::{NodeGraph, NodeGraphBuilder};
 use rustre_parser::ast::{NodeNode, Root};
 use std::path::PathBuf;
+use yeter::Database;
 
 /// Builds a new compiler driver, that corresponds to a compilation session.
 ///
 /// This function should only be called once.
-pub fn driver() -> yeter::Database {
-    let mut db = yeter::Database::new();
-    db.register::<_, parse::parse_file::Query>(|_db, file| {
-        let source = file.text;
-        // TODO: report errors
-        let (root, _errors) = rustre_parser::parse(&source);
-        root
-    });
-    db.register::<_, files::files::Query>(|_db, ()| vec![]);
-    db.register::<_, graph::build_node_graph::Query>(|_db, node| {
-        let mut builder = NodeGraphBuilder::default();
-        let graph = builder.try_parse_node_graph(&node);
-
-        if !builder.errors.is_empty() {
-            // TODO: report errors
-            eprint!(
-                "yeter doesn't support error reporting but we got these: {:?}",
-                &builder.errors
-            );
-        }
-
-        graph
-    });
+pub fn driver() -> Database {
+    let mut db = Database::new();
+    db.register_impl::<parse_file>();
+    db.register::<_, files>(|_db, ()| vec![]);
+    db.register_impl::<build_node_graph>();
     db
-}
-
-yeter::queries! {
-    parse {
-        parse_file: crate::SourceFile: rustre_parser::ast::Root
-    },
-    files {
-        files: (): Vec<crate::SourceFile>
-    },
-    graph {
-        build_node_graph: rustre_parser::ast::NodeNode: crate::node_graph::NodeGraph
-    }
 }
 
 // Inputs
@@ -62,29 +33,47 @@ pub struct SourceFile {
 
 impl SourceFile {
     fn new(path: PathBuf, text: String) -> SourceFile {
-        SourceFile {
-            path: path,
-            text: text,
-        }
+        SourceFile { path, text }
     }
 }
 
 /// **Query**: Parses a given file
-pub fn parse_file(_db: &yeter::Database, file: &SourceFile) -> Root {
-    let source = &file.text;
+#[yeter::query]
+pub fn parse_file(_db: &Database, file: SourceFile) -> Root {
+    let source = file.text;
     // TODO: report errors
-    let (root, _errors) = rustre_parser::parse(source);
+    let (root, _errors) = rustre_parser::parse(&source);
     root
 }
 
-/// **Query**: Adds a source file to the list of files that are known by the compiler
-pub fn add_source_file(db: &mut yeter::Database, path: PathBuf) {
+/// **Query**: Returns a list of all directly and indirectly included files in the Lustre program
+#[yeter::query]
+pub fn files(_db: &Database) -> Vec<SourceFile>;
+
+#[yeter::query]
+pub fn build_node_graph(_db: &Database, node: NodeNode) -> NodeGraph {
+    let mut builder = NodeGraphBuilder::default();
+    let graph = builder.try_parse_node_graph(&node);
+
+    if !builder.errors.is_empty() {
+        // TODO: report errors
+        eprint!(
+            "yeter doesn't support error reporting but we got these: {:?}",
+            &builder.errors
+        );
+    }
+
+    graph
+}
+
+/// Adds a source file to the list of files that are known by the compiler
+pub fn add_source_file(db: &mut Database, path: PathBuf) {
     let contents = std::fs::read_to_string(&path).unwrap(); // TODO: report the error
-    let file = SourceFile::new(path.clone(), contents);
-    let files = files::files::query(db, ());
+    let file = SourceFile::new(path, contents);
+    let files = files(db);
     let mut files = (*files).clone();
     files.push(file);
-    db.register::<_, files::files::Query>(move |_db, ()| {
+    db.register::<_, files>(move |_db, ()| {
         files.clone() // TODO: find a way to not clone?
     })
 }
@@ -97,8 +86,8 @@ mod tests {
     fn parse_query() {
         let mut driver = super::driver();
         super::add_source_file(&mut driver, Path::new("../tests/stable.lus").to_owned());
-        for file in &*super::files::files::query(&driver, ()) {
-            let ast = super::parse_file(&driver, file);
+        for file in &*super::files(&driver) {
+            let ast = super::parse_file(&driver, file.clone());
             assert_eq!(ast.all_include_statement().count(), 1);
         }
     }

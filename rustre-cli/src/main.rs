@@ -49,9 +49,9 @@ fn main() -> Result<(), u8> {
 
                     let mut driver = rustre_core::driver();
                     rustre_core::add_source_file(&mut driver, path);
-                    for file in &*rustre_core::files::files::query(&driver, ()) {
+                    for file in &*rustre_core::files(&driver) {
                         dbg!(&file.path);
-                        let ast = rustre_core::parse_file(&driver, file);
+                        let ast = rustre_core::parse_file(&driver, file.clone());
                         print(0, NodeOrToken::Node(ast.syntax().clone()));
                     }
 
@@ -84,10 +84,10 @@ fn main() -> Result<(), u8> {
             let mut driver = rustre_core::driver();
             rustre_core::add_source_file(&mut driver, file.clone());
 
-            for file in &*rustre_core::files::files::query(&driver, ()) {
-                let root = rustre_core::parse_file(&driver, file);
+            for file in &*rustre_core::files(&driver) {
+                let root = rustre_core::parse_file(&driver, file.clone());
                 for node in root.all_node_node() {
-                    let graph = &*rustre_core::graph::build_node_graph::query(&driver, node);
+                    let graph = &*rustre_core::build_node_graph(&driver, node);
                     println!("{graph}");
                 }
             }
