@@ -53,6 +53,11 @@ fn main() -> Result<(), u8> {
                         dbg!(&file.path);
                         let ast = rustre_core::parse_file(&driver, file.clone());
                         print(0, NodeOrToken::Node(ast.syntax().clone()));
+
+                        for node in ast.all_node_node() {
+                            let sig = rustre_core::get_signature(&driver, node);
+                            dbg!(sig);
+                        }
                     }
 
                     // TODO: re-introduce error handling when they are reported with salsa
