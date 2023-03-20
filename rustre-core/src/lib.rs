@@ -2,13 +2,13 @@
 //!
 //! It is built around [salsa].
 
-pub mod expression;
-pub mod node_graph;
 use std::path::PathBuf;
 
 use rustre_parser::ast::{NodeNode, Root, AstToken};
 use yeter;
 
+pub mod expression;
+pub mod node_graph;
 mod types;
 
 use node_graph::{NodeGraph, NodeGraphBuilder};
@@ -34,6 +34,9 @@ pub fn driver() -> Database {
         }
         None
     });
+
+    db.register::<_, files>(|_db, ()| vec![]);
+    db.register_impl::<build_node_graph>();
     db
 }
 
