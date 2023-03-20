@@ -1,5 +1,3 @@
-use std::any::Any;
-
 use rustre_parser::ast::ExpressionNode;
 
 #[derive(PartialEq, Eq)]
@@ -48,14 +46,14 @@ pub fn type_check_query(db: &yeter::Database, node_name: String) -> Result<Type,
 
 pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Result<Type, ()> {
     match expr {
-        ExpressionNode::ConstantNode(node) => {
+        ExpressionNode::ConstantNode(_node) => {
             todo!()
         },
         ExpressionNode::NotExpressionNode(node) => {
-            let exp = type_check_expression(db, &node.expression_node().unwrap());
+            let _exp = type_check_expression(db, &node.operand().unwrap());
         },
         ExpressionNode::NegExpressionNode(node) => {
-            let type_exp = type_check_expression(db, &node.expression_node().unwrap());
+            let type_exp = type_check_expression(db, &node.operand().unwrap());
             return match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 Ok(Type::Real) => Ok(Type::Real),
@@ -63,7 +61,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Res
             };
         },
         ExpressionNode::PreExpressionNode(node) => {
-            let type_exp = type_check_expression(db, &node.expression_node().unwrap());
+            let type_exp = type_check_expression(db, &node.operand().unwrap());
             return match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 Ok(Type::Real) => Ok(Type::Real),
@@ -71,7 +69,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Res
             };
         },
         ExpressionNode::CurrentExpressionNode(node) => {
-            let type_exp = type_check_expression(db, &node.expression_node().unwrap());
+            let type_exp = type_check_expression(db, &node.operand().unwrap());
             return match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 Ok(Type::Real) => Ok(Type::Real),
@@ -79,14 +77,14 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Res
             };
         },
         ExpressionNode::IntExpressionNode(node) => {
-            let type_exp = type_check_expression(db, &node.expression_node().unwrap());
+            let type_exp = type_check_expression(db, &node.operand().unwrap());
             return match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 _ => Err(()),
             };
         },
         ExpressionNode::RealExpressionNode(node) => {
-            let type_exp = type_check_expression(db, &node.expression_node().unwrap());
+            let type_exp = type_check_expression(db, &node.operand().unwrap());
             return match type_exp {
                 Ok(Type::Real) => Ok(Type::Real),
                 _ => Err(()),

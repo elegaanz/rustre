@@ -96,6 +96,10 @@ pub trait UnaryExpression {
     fn operand(&self) -> Option<ExpressionNode>;
 }
 
+pub trait VariadicExpr {
+    fn list(&self) -> Option<ExpressionListNode>;
+}
+
 macro_rules! impl_bin_expr {
     ($name:ident) => {
         impl BinaryExpression for $name {
@@ -146,5 +150,17 @@ impl_un_expr!(PreExpressionNode);
 impl_un_expr!(CurrentExpressionNode);
 impl_un_expr!(IntExpressionNode);
 impl_un_expr!(RealExpressionNode);
-impl_un_expr!(DieseExpressionNode);
-impl_un_expr!(NorExpressionNode);
+
+
+macro_rules! impl_variadic_expr {
+    ($name:ident) => {
+        impl VariadicExpr for $name {
+            fn list(&self) -> Option<ExpressionListNode> {
+                $name::list(self)
+            }
+        }
+    };
+}
+
+impl_variadic_expr!(DieseExpressionNode);
+impl_variadic_expr!(NorExpressionNode);

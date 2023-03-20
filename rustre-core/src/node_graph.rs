@@ -233,8 +233,8 @@ impl NodeGraphBuilder {
             BakedExpression::Real(b) => add_node(Expression::Real, &[b]),
             BakedExpression::If(cond, if_body, else_body) => add_node(Expression::If, &[cond, if_body, else_body]),
             BakedExpression::With(cond, if_body, else_body) => add_node(Expression::With, &[cond, if_body, else_body]),
-            BakedExpression::Diese(v) => add_node(Expression::Diese, &[v]),
-            BakedExpression::Nor(v) => add_node(Expression::Nor, &[v]),
+            BakedExpression::Diese(v) => add_node(Expression::Diese, &v.iter().collect::<Vec<_>>()),
+            BakedExpression::Nor(v) => add_node(Expression::Nor, &v.iter().collect::<Vec<_>>()),
         }
     }
 

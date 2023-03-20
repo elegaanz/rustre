@@ -80,7 +80,7 @@ fn main() -> Result<(), u8> {
                 }
             }
         }
-        Commands::Dot { file, node } => {
+        Commands::Dot { file, node: _ } => {
             let mut driver = rustre_core::driver();
             rustre_core::add_source_file(&mut driver, file.clone());
 

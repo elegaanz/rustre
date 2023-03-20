@@ -1,4 +1,4 @@
-use rustre_parser::ast::{AstToken, BinaryExpression, UnaryExpression, ConstantNode, ExpressionNode, IfExpressionNode, WithExpressionNode};
+use rustre_parser::ast::{AstToken, BinaryExpression, UnaryExpression, ConstantNode, ExpressionNode, IfExpressionNode, WithExpressionNode, VariadicExpr};
 use rustre_parser::SyntaxNode;
 
 /// A non-type-checked expression tree
@@ -44,8 +44,8 @@ pub enum BakedExpression {
     Real(Box<BakedExpression>),
     If(Box<BakedExpression>, Box<BakedExpression>, Box<BakedExpression>),
     With(Box<BakedExpression>, Box<BakedExpression>, Box<BakedExpression>),
-    Diese(Box<BakedExpression>),
-    Nor(Box<BakedExpression>),
+    Diese(Vec<BakedExpression>),
+    Nor(Vec<BakedExpression>),
     // TODO add remaining expressions
     // TODO add SyntaxNode (or any way to access the original syntax for diagnostics)
 }
@@ -138,10 +138,10 @@ impl BakedExpression {
                 Self::bake_with(&node)
             },
             ExpressionNode::DieseExpressionNode(node) => {
-                Self::bake_unary(Self::Diese, &node)
+                Self::bake_variadic(Self::Diese, &node)
             }
             ExpressionNode::NorExpressionNode(node) => {
-                Self::bake_unary(Self::Nor, &node)
+                Self::bake_variadic(Self::Nor, &node)
             }
             ExpressionNode::IdentExpressionNode(node) => {
                 let id_node = node.id_node().unwrap();
@@ -223,6 +223,17 @@ impl BakedExpression {
             Box::new(Self::bake(then)?),
             Box::new(Self::bake(otherwise)?),
         ))
+    }
+
+    fn bake_variadic(
+        factory: fn(Vec<Self>) -> Self,
+        expr: &impl VariadicExpr,
+    ) -> Result<Self, &'static str> {
+        let mut res = Vec::new();
+        for sub_expr in expr.list().unwrap().all_expression_node() {
+            res.push(Self::bake(sub_expr)?);
+        }
+        Ok(factory(res))
     }
 }
 
