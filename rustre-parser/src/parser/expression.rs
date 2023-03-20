@@ -4,11 +4,12 @@
 
 use super::*;
 
+// TODO: is this function still needed?
 pub fn expr_node<'slice, 'src: 'slice>(
     node: Token,
     parser: impl nom::Parser<Input<'slice, 'src>, Children, RustreParseError>,
 ) -> impl FnMut(Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    super::node(ExpressionNode, super::node(node, parser))
+    super::node(node, parser)
 }
 
 macro_rules! parse_ops {
@@ -44,7 +45,7 @@ fn parse_expression_left<'slice, 'src: 'slice>(
                 let (input, b) = next.parse(input)?;
                 Ok((input, (a + b, n)))
             },
-            |a, (b, n)| (a + b).into_node(n).into_node(ExpressionNode),
+            |a, (b, n)| (a + b).into_node(n),
         )(input)
     }
 }
@@ -58,7 +59,7 @@ fn parse_expression_right<'slice, 'src: 'slice>(
         fold_many1_right_expr(
             next,
             |input| parse_operator.parse(input),
-            |a, (b, n)| (a + b).into_node(n).into_node(ExpressionNode),
+            |a, (b, n)| (a + b).into_node(n),
         )(input)
     }
 }
@@ -84,7 +85,7 @@ fn parse_expression_no_assoc<'slice, 'src: 'slice>(
             input = new_input;
             left_expr += operand;
 
-            left_expr = left_expr.into_node(operator_node).into_node(ExpressionNode);
+            left_expr = left_expr.into_node(operator_node);
         }
 
         // Tolerance: Handle additional occurrences of the operator
@@ -107,7 +108,7 @@ pub fn parse_expression_terminal<'slice, 'src>(
     input: Input<'slice, 'src>,
 ) -> IResult<'slice, 'src> {
     alt((
-        node(ExpressionNode, parse_constant),
+        parse_constant,
         expression_by_names::parse_call_by_name_expression,
         expr_node(IdentExpressionNode, ident::parse_id_any),
         expr_node(
@@ -143,7 +144,7 @@ pub fn parse_expression_0<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
             map(parse_call_par, |c| (c, CallByPosExpressionNode)),
             map(parse_array_brackets, |c| (c, ArrayAccessExpressionNode)),
         )),
-        |a, (b, n)| (a + b).into_node(n).into_node(ExpressionNode),
+        |a, (b, n)| (a + b).into_node(n),
     )(input)
 }
 
@@ -219,7 +220,6 @@ pub fn parse_expression_7<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
         |a, b| {
             (a + b)
                 .into_node(WhenExpressionNode)
-                .into_node(ExpressionNode)
         },
     )(input)
 }

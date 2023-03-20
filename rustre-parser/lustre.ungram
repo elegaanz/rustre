@@ -74,7 +74,39 @@ LeftItemNode = IdNode? // TODO
 
 // === ExpressionRules ===
 
-ExpressionNode = ConstantNode? IdentExpressionNode? ParExpressionNode? NotExpressionNode? NegExpressionNode? PreExpressionNode? CurrentExpressionNode? IntExpressionNode? RealExpressionNode? WhenExpressionNode? FbyExpressionNode? ArrowExpressionNode? AndExpressionNode? OrExpressionNode? XorExpressionNode?        AddExpressionNode? // TODO impl
+ExpressionNode = ConstantNode
+    | IdentExpressionNode
+    | NotExpressionNode
+    | NegExpressionNode
+    | PreExpressionNode
+    | CurrentExpressionNode
+    | IntExpressionNode
+    | RealExpressionNode
+    | WhenExpressionNode
+    | FbyExpressionNode
+    | ArrowExpressionNode
+    | AndExpressionNode
+    | OrExpressionNode
+    | XorExpressionNode
+    | ImplExpressionNode
+    | EqExpressionNode
+    | NeqExpressionNode
+    | LtExpressionNode
+    | LteExpressionNode
+    | GtExpressionNode
+    | GteExpressionNode
+    | DivExpressionNode
+    | ModExpressionNode
+    | SubExpressionNode
+    | AddExpressionNode
+    | MulExpressionNode
+    | PowerExpressionNode
+    | IfExpressionNode
+    | WithExpressionNode
+    | DieseExpressionNode
+    | NorExpressionNode
+    | ParExpressionNode
+
 IdentExpressionNode = IdNode
 ParExpressionNode = ExpressionNode
 ClockExpressionNode = 'not'? IdNode // TODO
@@ -107,8 +139,8 @@ MulExpressionNode = left:ExpressionNode 'star' right:ExpressionNode
 PowerExpressionNode = left:ExpressionNode 'power' right:ExpressionNode
 IfExpressionNode = 'if' cond:ExpressionNode 'then' if_body:ExpressionNode 'else' else_body:ExpressionNode
 WithExpressionNode = 'with' cond:ExpressionNode 'then' with_body:ExpressionNode 'else' else_body:ExpressionNode
-DieseExpressionNode = 'diese' ExpressionListNode
-NorExpressionNode = 'nor' ExpressionListNode
+DieseExpressionNode = 'diese' list:ExpressionListNode
+NorExpressionNode = 'nor' list:ExpressionListNode
 
 // === ConstantRules ===
 

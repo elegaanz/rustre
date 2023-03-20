@@ -92,6 +92,10 @@ pub trait BinaryExpression {
     fn right(&self) -> Option<ExpressionNode>;
 }
 
+pub trait UnaryExpression {
+    fn operand(&self) -> Option<ExpressionNode>;
+}
+
 macro_rules! impl_bin_expr {
     ($name:ident) => {
         impl BinaryExpression for $name {
@@ -125,3 +129,22 @@ impl_bin_expr!(SubExpressionNode);
 impl_bin_expr!(AddExpressionNode);
 impl_bin_expr!(MulExpressionNode);
 impl_bin_expr!(PowerExpressionNode);
+
+macro_rules! impl_un_expr {
+    ($name:ident) => {
+        impl UnaryExpression for $name {
+            fn operand(&self) -> Option<ExpressionNode> {
+                $name::operand(self)
+            }
+        }
+    };
+}
+
+impl_un_expr!(NotExpressionNode);
+impl_un_expr!(NegExpressionNode);
+impl_un_expr!(PreExpressionNode);
+impl_un_expr!(CurrentExpressionNode);
+impl_un_expr!(IntExpressionNode);
+impl_un_expr!(RealExpressionNode);
+impl_un_expr!(DieseExpressionNode);
+impl_un_expr!(NorExpressionNode);
