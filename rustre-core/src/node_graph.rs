@@ -10,6 +10,8 @@ use std::collections::{HashMap, HashSet};
 use std::fmt::{Display, Formatter};
 use std::hash::{Hash, Hasher};
 
+pub type NodeIndex = petgraph::graph::NodeIndex<u32>;
+
 // FIXME this error type is bad
 #[derive(Debug)]
 pub enum Error {
@@ -80,10 +82,10 @@ impl Hash for Expression {
 #[derive(Clone)]
 pub struct NodeGraph {
     /// Direct graph of expressions, connected by an operand index
-    graph: DiGraph<Expression, u8, u32>,
+    pub graph: DiGraph<Expression, u8, u32>,
 
     /// Mapping of variable/parameter names to graph node ID
-    bindings: BiMap<String, NodeIndex<u32>>,
+    pub bindings: BiMap<String, NodeIndex>,
 }
 
 // Probably very bad but it should be ok for the moment
@@ -128,14 +130,6 @@ impl Display for NodeGraph {
 
         let dot = petgraph::dot::Dot::new(&graph_mapped);
         Display::fmt(&dot, f)
-    }
-}
-
-impl NodeGraph {
-    /// Optimisation pass: finds equal branches and collapses them into a single one to refrain from
-    /// computing the same value twice
-    pub fn collapse_duplicate_nodes(self) -> Self {
-        todo!()
     }
 }
 
@@ -189,7 +183,7 @@ impl NodeGraphBuilder {
         &mut self,
         graph: &mut NodeGraph,
         baked_expr: &BakedExpression,
-    ) -> NodeIndex<u32> {
+    ) -> NodeIndex {
         let mut add_node = |expr: Expression, operands: &[&BakedExpression]| {
             let node = graph.graph.add_node(expr);
             for (idx, operand) in operands.iter().enumerate() {

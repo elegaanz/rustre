@@ -1,17 +1,19 @@
 //! Rustre compiler driver
 //!
-//! It is built around [salsa].
+//! It is built around [yeter].
 
 use std::path::PathBuf;
 
-use rustre_parser::ast::{NodeNode, Root, AstToken};
 use yeter;
 
 pub mod expression;
+pub mod name_resolution;
 pub mod node_graph;
 mod types;
 
 use node_graph::{NodeGraph, NodeGraphBuilder};
+use rustre_parser::ast::{Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode, AstToken};
+use std::rc::Rc;
 use yeter::Database;
 
 /// Builds a new compiler driver, that corresponds to a compilation session.
@@ -37,6 +39,16 @@ pub fn driver() -> Database {
 
     db.register::<_, files>(|_db, ()| vec![]);
     db.register_impl::<build_node_graph>();
+    db.register_impl::<parsed_files>();
+
+    db.register_impl::<get_signature>();
+
+    // mod name_resolution
+    db.register_impl::<name_resolution::resolve_const_node>();
+    db.register_impl::<name_resolution::resolve_const_expr_node>();
+    db.register_impl::<name_resolution::resolve_runtime_node>();
+    db.register_impl::<name_resolution::resolve_runtime_expr_node>();
+
     db
 }
 
@@ -58,6 +70,13 @@ impl SourceFile {
     }
 }
 
+#[derive(Clone, Debug, Hash)]
+pub struct Signature {
+    name: Option<Ident>,
+    params: Vec<TypedIdsNode>,
+    return_params: Vec<TypedIdsNode>,
+}
+
 /// **Query**: Parses a given file
 #[yeter::query]
 pub fn parse_file(_db: &Database, file: SourceFile) -> Root {
@@ -70,6 +89,14 @@ pub fn parse_file(_db: &Database, file: SourceFile) -> Root {
 /// **Query**: Returns a list of all directly and indirectly included files in the Lustre program
 #[yeter::query]
 pub fn files(_db: &Database) -> Vec<SourceFile>;
+
+#[yeter::query]
+fn parsed_files(db: &Database) -> Vec<Rc<Root>> {
+    files(db)
+        .iter()
+        .map(|s| parse_file(db, s.clone()))
+        .collect::<Vec<_>>()
+}
 
 #[yeter::query]
 pub fn build_node_graph(_db: &Database, node: NodeNode) -> NodeGraph {
@@ -85,6 +112,26 @@ pub fn build_node_graph(_db: &Database, node: NodeNode) -> NodeGraph {
     }
 
     graph
+}
+
+#[yeter::query]
+pub fn get_signature(_db: &Database, node: NodeNode) -> Signature {
+    let sig = node.node_profile_node();
+
+    let get_params = |f: fn(&NodeProfileNode) -> Option<ParamsNode>| {
+        sig.clone()
+            .and_then(|sig| f(&sig))
+            .and_then(|p| p.all_var_decl_node().next())
+            .iter()
+            .flat_map(|v| v.all_typed_ids_node())
+            .collect::<Vec<_>>()
+    };
+
+    Signature {
+        name: node.id_node().and_then(|id| id.ident()),
+        params: get_params(NodeProfileNode::params),
+        return_params: get_params(NodeProfileNode::return_params),
+    }
 }
 
 /// Adds a source file to the list of files that are known by the compiler
