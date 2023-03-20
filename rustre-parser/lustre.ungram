@@ -137,8 +137,8 @@ MulExpressionNode = left:ExpressionNode 'star' right:ExpressionNode
 PowerExpressionNode = left:ExpressionNode 'power' right:ExpressionNode
 IfExpressionNode = 'if' cond:ExpressionNode 'then' if_body:ExpressionNode 'else' else_body:ExpressionNode
 WithExpressionNode = 'with' cond:ExpressionNode 'then' with_body:ExpressionNode 'else' else_body:ExpressionNode
-DieseExpressionNode = 'diese' ExpressionListNode
-NorExpressionNode = 'nor' ExpressionListNode
+DieseExpressionNode = 'diese' list:ExpressionListNode
+NorExpressionNode = 'nor' list:ExpressionListNode
 
 IdentExpressionNode = IdNode
 ParExpressionNode = ExpressionNode
