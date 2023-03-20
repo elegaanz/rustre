@@ -1,4 +1,4 @@
-use rustre_parser::ast::{AstToken, BinaryExpression, ConstantNode, ExpressionNode};
+use rustre_parser::ast::{AstToken, BinaryExpression, UnaryExpression, ConstantNode, ExpressionNode, IfExpressionNode, WithExpressionNode};
 use rustre_parser::SyntaxNode;
 
 /// A non-type-checked expression tree
@@ -21,6 +21,31 @@ pub enum BakedExpression {
     Xor(Box<BakedExpression>, Box<BakedExpression>),
     Or(Box<BakedExpression>, Box<BakedExpression>),
     And(Box<BakedExpression>, Box<BakedExpression>),
+
+    Not(Box<BakedExpression>),
+    Neg(Box<BakedExpression>),
+    Current(Box<BakedExpression>),
+    Lt(Box<BakedExpression>, Box<BakedExpression>),
+    Lte(Box<BakedExpression>, Box<BakedExpression>),
+    Gt(Box<BakedExpression>, Box<BakedExpression>),
+    Gte(Box<BakedExpression>, Box<BakedExpression>),
+    Eq(Box<BakedExpression>, Box<BakedExpression>),
+    Neq(Box<BakedExpression>, Box<BakedExpression>),
+    Impl(Box<BakedExpression>, Box<BakedExpression>),
+    Div(Box<BakedExpression>, Box<BakedExpression>),
+    Mod(Box<BakedExpression>, Box<BakedExpression>),
+    Sub(Box<BakedExpression>, Box<BakedExpression>),
+    Mul(Box<BakedExpression>, Box<BakedExpression>),
+    Power(Box<BakedExpression>, Box<BakedExpression>),
+    Fby(Box<BakedExpression>, Box<BakedExpression>),
+    When(Box<BakedExpression>, Box<BakedExpression>),
+    Arrow(Box<BakedExpression>, Box<BakedExpression>),
+    Int(Box<BakedExpression>),
+    Real(Box<BakedExpression>),
+    If(Box<BakedExpression>, Box<BakedExpression>, Box<BakedExpression>),
+    With(Box<BakedExpression>, Box<BakedExpression>, Box<BakedExpression>),
+    Diese(Box<BakedExpression>),
+    Nor(Box<BakedExpression>),
     // TODO add remaining expressions
     // TODO add SyntaxNode (or any way to access the original syntax for diagnostics)
 }
@@ -28,9 +53,98 @@ pub enum BakedExpression {
 impl BakedExpression {
     pub fn bake(node: ExpressionNode) -> Result<Self, &'static str> {
         match node {
-            ExpressionNode::ConstantNode(constant) => Self::bake_literal(constant),
-            ExpressionNode::IdentExpressionNode(expr_id_node) => {
-                let id_node = expr_id_node.id_node().unwrap();
+            ExpressionNode::ConstantNode(node) => {
+                Self::bake_literal(node)
+            },
+            ExpressionNode::NotExpressionNode(node) => {
+                Self::bake_unary(Self::Not, &node)
+            },
+            ExpressionNode::NegExpressionNode(node) => {
+                Self::bake_unary(Self::Neg, &node)
+            },
+            ExpressionNode::PreExpressionNode(node) => {
+                Self::bake_unary(Self::Pre, &node)
+            },
+            ExpressionNode::CurrentExpressionNode(node) => {
+                Self::bake_unary(Self::Current, &node)
+            },
+            ExpressionNode::IntExpressionNode(node) => {
+                Self::bake_unary(Self::Int, &node)
+            },
+            ExpressionNode::RealExpressionNode(node) => {
+                Self::bake_unary(Self::Real, &node)
+            },
+            ExpressionNode::WhenExpressionNode(node) => {
+                Self::bake_binary(Self::When, &node)
+            },
+            ExpressionNode::FbyExpressionNode(node) => {
+                Self::bake_binary(Self::Fby, &node)
+            },
+            ExpressionNode::ArrowExpressionNode(node) => {
+                Self::bake_binary(Self::Arrow, &node)
+            },
+            ExpressionNode::AndExpressionNode(node) => {
+                Self::bake_binary(Self::And, &node)
+            },
+            ExpressionNode::OrExpressionNode(node) => {
+                Self::bake_binary(Self::Or, &node)
+            },
+            ExpressionNode::XorExpressionNode(node) => {
+                Self::bake_binary(Self::Xor, &node)
+            },
+            ExpressionNode::ImplExpressionNode(node) => {
+                Self::bake_binary(Self::Impl, &node)
+            },
+            ExpressionNode::EqExpressionNode(node) => {
+                Self::bake_binary(Self::Eq, &node)
+            },
+            ExpressionNode::NeqExpressionNode(node) => {
+                Self::bake_binary(Self::Neq, &node)
+            },
+            ExpressionNode::LtExpressionNode(node) => {
+                Self::bake_binary(Self::Lt, &node)
+            },
+            ExpressionNode::LteExpressionNode(node) => {
+                Self::bake_binary(Self::Lte, &node)
+            },
+            ExpressionNode::GtExpressionNode(node) => {
+                Self::bake_binary(Self::Gt, &node)
+            },
+            ExpressionNode::GteExpressionNode(node) => {
+                Self::bake_binary(Self::Gte, &node)
+            },
+            ExpressionNode::AddExpressionNode(node) => {
+                Self::bake_binary(Self::Add, &node)
+            },
+            ExpressionNode::SubExpressionNode(node) => {
+                Self::bake_binary(Self::Sub, &node)
+            },
+            ExpressionNode::MulExpressionNode(node) => {
+                Self::bake_binary(Self::Mul, &node)
+            },
+            ExpressionNode::DivExpressionNode(node) => {
+                Self::bake_binary(Self::Div, &node)
+            },
+            ExpressionNode::ModExpressionNode(node) => {
+                Self::bake_binary(Self::Mod, &node)
+            },
+            ExpressionNode::PowerExpressionNode(node) => {
+                Self::bake_binary(Self::Power, &node)
+            },
+            ExpressionNode::IfExpressionNode(node) => {
+                Self::bake_if(&node)
+            },
+            ExpressionNode::WithExpressionNode(node) => {
+                Self::bake_with(&node)
+            },
+            ExpressionNode::DieseExpressionNode(node) => {
+                Self::bake_unary(Self::Diese, &node)
+            }
+            ExpressionNode::NorExpressionNode(node) => {
+                Self::bake_unary(Self::Nor, &node)
+            }
+            ExpressionNode::IdentExpressionNode(node) => {
+                let id_node = node.id_node().unwrap();
                 Ok(Self::Identifier(id_node.ident().unwrap().text().into()))
             }
             ExpressionNode::ParExpressionNode(paren) => {
@@ -40,11 +154,6 @@ impl BakedExpression {
                     Err("expected expression inside parenthesis")
                 }
             }
-            ExpressionNode::AndExpressionNode(node) => Self::bake_binary(Self::And, &node),
-            ExpressionNode::OrExpressionNode(node) => Self::bake_binary(Self::Or, &node),
-            ExpressionNode::XorExpressionNode(node) => Self::bake_binary(Self::Xor, &node),
-            ExpressionNode::AddExpressionNode(node) => Self::bake_binary(Self::Add, &node),
-            _ => unimplemented!("unknown expression token {node:?}"),
         }
     }
 
@@ -77,6 +186,44 @@ impl BakedExpression {
             (None, None) => Err("missing both operands"),
         }
     }
+
+    fn bake_unary(
+        factory: fn(Box<Self>) -> Self,
+        expr: &impl UnaryExpression,
+    ) -> Result<Self, &'static str> {
+        match expr.operand() {
+            Some(op) => Ok(factory(Box::new(Self::bake(op)?))),
+            None => Err("missing operand"),
+        }
+    }
+
+    fn bake_if(
+        expr: &IfExpressionNode,
+    ) -> Result<Self, &'static str> {
+        let condition = expr.cond().unwrap();
+        let then = expr.if_body().unwrap();
+        let otherwise = expr.else_body().unwrap();
+
+        Ok(Self::If(
+            Box::new(Self::bake(condition)?),
+            Box::new(Self::bake(then)?),
+            Box::new(Self::bake(otherwise)?),
+        ))
+    }
+
+    fn bake_with(
+        expr: &WithExpressionNode,
+    ) -> Result<Self, &'static str> {
+        let condition = expr.cond().unwrap();
+        let then = expr.with_body().unwrap();
+        let otherwise = expr.else_body().unwrap();
+
+        Ok(Self::With(
+            Box::new(Self::bake(condition)?),
+            Box::new(Self::bake(then)?),
+            Box::new(Self::bake(otherwise)?),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -95,7 +242,7 @@ mod tests {
         let (node, errors) = children.into_root_node(lexer::Token::Root);
         assert_eq!(errors.len(), 0, "parse errors");
 
-        ExpressionNode::cast(node.children().next().unwrap()).unwrap()
+        ExpressionNode::cast(dbg!(node.children().next().unwrap())).unwrap()
     }
 
     #[test]

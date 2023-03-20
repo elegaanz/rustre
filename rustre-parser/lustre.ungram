@@ -75,6 +75,7 @@ LeftItemNode = IdNode? // TODO
 // === ExpressionRules ===
 
 ExpressionNode = ConstantNode
+    | IdentExpressionNode
     | NotExpressionNode
     | NegExpressionNode
     | PreExpressionNode
@@ -104,9 +105,10 @@ ExpressionNode = ConstantNode
     | WithExpressionNode
     | DieseExpressionNode
     | NorExpressionNode
-    | IdentExpressionNode
     | ParExpressionNode
 
+IdentExpressionNode = IdNode
+ParExpressionNode = ExpressionNode
 ClockExpressionNode = 'not'? IdNode // TODO
 ExpressionListNode = ExpressionNode*
 
@@ -139,9 +141,6 @@ IfExpressionNode = 'if' cond:ExpressionNode 'then' if_body:ExpressionNode 'else'
 WithExpressionNode = 'with' cond:ExpressionNode 'then' with_body:ExpressionNode 'else' else_body:ExpressionNode
 DieseExpressionNode = 'diese' list:ExpressionListNode
 NorExpressionNode = 'nor' list:ExpressionListNode
-
-IdentExpressionNode = IdNode
-ParExpressionNode = ExpressionNode
 
 // === ConstantRules ===
 
