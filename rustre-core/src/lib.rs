@@ -4,11 +4,14 @@
 
 pub mod expression;
 pub mod node_graph;
+use std::path::PathBuf;
+
+use rustre_parser::ast::{NodeNode, Root, AstToken};
+use yeter;
+
 mod types;
 
 use node_graph::{NodeGraph, NodeGraphBuilder};
-use rustre_parser::ast::{NodeNode, Root};
-use std::path::PathBuf;
 use yeter::Database;
 
 /// Builds a new compiler driver, that corresponds to a compilation session.
@@ -19,8 +22,23 @@ pub fn driver() -> Database {
     db.register_impl::<parse_file>();
     db.register::<_, files>(|_db, ()| vec![]);
     db.register_impl::<build_node_graph>();
+    db.register_impl::<types::type_check_query>();
+    db.register::<_, find_node>(|db, (node_name,)| {
+        for file in &*files(db) {
+            let ast = parse_file(db, file.clone());
+            for node in ast.all_node_node() {
+                if node.id_node()?.ident()?.text() == node_name {
+                    return Some(node.clone());
+                }
+            }
+        }
+        None
+    });
     db
 }
+
+#[yeter::query]
+fn find_node(db: &Database, node_name: String) -> Option<NodeNode>;
 
 // Inputs
 // TODO: maybe they should be moved to their own module

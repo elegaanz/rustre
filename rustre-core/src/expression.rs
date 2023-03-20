@@ -27,27 +27,24 @@ pub enum BakedExpression {
 
 impl BakedExpression {
     pub fn bake(node: ExpressionNode) -> Result<Self, &'static str> {
-        if let Some(constant) = node.constant_node() {
-            Self::bake_literal(constant)
-        } else if let Some(expr_id_node) = node.ident_expression_node() {
-            let id_node = expr_id_node.id_node().unwrap();
-            Ok(Self::Identifier(id_node.ident().unwrap().text().into()))
-        } else if let Some(paren) = node.par_expression_node() {
-            if let Some(inner_expr) = paren.expression_node() {
-                Ok(Self::Parenthesised(Box::new(Self::bake(inner_expr)?))) // TODO Error
-            } else {
-                Err("expected expression inside parenthesis")
+        match node {
+            ExpressionNode::ConstantNode(constant) => Self::bake_literal(constant),
+            ExpressionNode::IdentExpressionNode(expr_id_node) => {
+                let id_node = expr_id_node.id_node().unwrap();
+                Ok(Self::Identifier(id_node.ident().unwrap().text().into()))
             }
-        } else if let Some(node) = node.and_expression_node() {
-            Self::bake_binary(Self::And, &node)
-        } else if let Some(node) = node.or_expression_node() {
-            Self::bake_binary(Self::Or, &node)
-        } else if let Some(node) = node.xor_expression_node() {
-            Self::bake_binary(Self::Xor, &node)
-        } else if let Some(node) = node.add_expression_node() {
-            Self::bake_binary(Self::Add, &node)
-        } else {
-            unimplemented!("unknown expression token {node:?}")
+            ExpressionNode::ParExpressionNode(paren) => {
+                if let Some(inner_expr) = paren.expression_node() {
+                    Ok(Self::Parenthesised(Box::new(Self::bake(inner_expr)?))) // TODO Error
+                } else {
+                    Err("expected expression inside parenthesis")
+                }
+            }
+            ExpressionNode::AndExpressionNode(node) => Self::bake_binary(Self::And, &node),
+            ExpressionNode::OrExpressionNode(node) => Self::bake_binary(Self::Or, &node),
+            ExpressionNode::XorExpressionNode(node) => Self::bake_binary(Self::Xor, &node),
+            ExpressionNode::AddExpressionNode(node) => Self::bake_binary(Self::Add, &node),
+            _ => unimplemented!("unknown expression token {node:?}"),
         }
     }
 
@@ -85,7 +82,7 @@ impl BakedExpression {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rustre_parser::*;
+    use rustre_parser::{*, ast::AstNode};
 
     fn parse(source: &str) -> ExpressionNode {
         let tokens = lex(source)
