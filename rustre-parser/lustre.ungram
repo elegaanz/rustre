@@ -146,4 +146,4 @@ CallByPosExpressionNode = node_ref:IdentExpressionNode 'open_par' args:Expressio
 
 // === ConstantRules ===
 
-ConstantNode = 'true'? 'false'? 'i_const'? 'r_const'?
+ConstantNode = 'true'? 'false'? 'i_const'? 'r_const'? // TODO Make enum
