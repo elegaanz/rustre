@@ -4,15 +4,13 @@
 
 use std::path::PathBuf;
 
-use yeter;
-
 pub mod expression;
 pub mod name_resolution;
-pub mod node_graph;
 mod types;
 
-use node_graph::{NodeGraph, NodeGraphBuilder};
-use rustre_parser::ast::{Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode, AstToken};
+use rustre_parser::ast::{
+    AstToken, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
+};
 use std::rc::Rc;
 use yeter::Database;
 
@@ -23,7 +21,6 @@ pub fn driver() -> Database {
     let mut db = Database::new();
     db.register_impl::<parse_file>();
     db.register::<_, files>(|_db, ()| vec![]);
-    db.register_impl::<build_node_graph>();
     db.register_impl::<types::type_check_query>();
     db.register::<_, find_node>(|db, (node_name,)| {
         for file in &*files(db) {
@@ -38,7 +35,6 @@ pub fn driver() -> Database {
     });
 
     db.register::<_, files>(|_db, ()| vec![]);
-    db.register_impl::<build_node_graph>();
     db.register_impl::<parsed_files>();
 
     db.register_impl::<get_signature>();
@@ -47,7 +43,6 @@ pub fn driver() -> Database {
     db.register_impl::<name_resolution::resolve_const_node>();
     db.register_impl::<name_resolution::resolve_const_expr_node>();
     db.register_impl::<name_resolution::resolve_runtime_node>();
-    db.register_impl::<name_resolution::resolve_runtime_expr_node>();
 
     db
 }
@@ -96,22 +91,6 @@ fn parsed_files(db: &Database) -> Vec<Rc<Root>> {
         .iter()
         .map(|s| parse_file(db, s.clone()))
         .collect::<Vec<_>>()
-}
-
-#[yeter::query]
-pub fn build_node_graph(_db: &Database, node: NodeNode) -> NodeGraph {
-    let mut builder = NodeGraphBuilder::default();
-    let graph = builder.try_parse_node_graph(&node);
-
-    if !builder.errors.is_empty() {
-        // TODO: report errors
-        eprint!(
-            "yeter doesn't support error reporting but we got these: {:?}",
-            &builder.errors
-        );
-    }
-
-    graph
 }
 
 #[yeter::query]

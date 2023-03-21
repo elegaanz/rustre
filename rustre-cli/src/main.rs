@@ -85,19 +85,8 @@ fn main() -> Result<(), u8> {
                 }
             }
         }
-        Commands::Dot { file, node: _ } => {
-            let mut driver = rustre_core::driver();
-            rustre_core::add_source_file(&mut driver, file.clone());
-
-            for file in &*rustre_core::files(&driver) {
-                let root = rustre_core::parse_file(&driver, file.clone());
-                for node in root.all_node_node() {
-                    let graph = &*rustre_core::build_node_graph(&driver, node);
-                    println!("{graph}");
-                }
-            }
-
-            Ok(())
+        Commands::Dot { file: _, node: _ } => {
+            todo!()
         }
         Commands::Build { file } => match file {
             Some(_filename) => {
