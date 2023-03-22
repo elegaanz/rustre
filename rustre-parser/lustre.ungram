@@ -51,7 +51,7 @@ StructDeclNode = 'struct' // TODO
 
 // === SimpleTypeRules ===
 
-TypeNode = 'bool'? 'int'? 'real'? IdNode? 'hat'? ExpressionNode?
+TypeNode = 'bool'? 'int'? 'real'? IdNode? 'hat'? power:ExpressionNode?
 
 // === ExtNodesRules ===
 
