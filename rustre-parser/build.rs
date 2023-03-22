@@ -1,4 +1,5 @@
 use case::CaseExt;
+use std::collections::HashMap;
 use std::{fs::File, io::Write};
 use std::path::PathBuf;
 use ungrammar::{Grammar, Rule};
@@ -263,14 +264,17 @@ impl Generator {
                             }
                             writeln!(self.out, "    }}").ok();
                         }
+                        let mut type_counter = HashMap::new();
                         for (unique_field, ty, is_token) in struc.unique_fields {
+                            let type_count = type_counter.entry(ty.clone()).or_insert(0);
                             writeln!(self.out, "    pub fn {}(&self) -> Option<{}> {{", Self::unreserv(unique_field.to_snake()), ty).ok();
                             if is_token {
-                                writeln!(self.out, "        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).find_map({}::cast)", ty).ok();
+                                writeln!(self.out, "        self.syntax().children_with_tokens().filter_map(|it| it.into_token()).filter_map({}::cast).nth({})", ty, type_count).ok();
                             } else {
-                                writeln!(self.out, "        self.syntax().children().find_map({}::cast)", ty).ok();
+                                writeln!(self.out, "        self.syntax().children().filter_map({}::cast).nth({})", ty, type_count).ok();
                             }
                             writeln!(self.out, "    }}").ok();
+                            *type_count += 1;
                         }
                         writeln!(self.out, "}}").ok();
                     }

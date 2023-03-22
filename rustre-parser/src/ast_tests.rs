@@ -51,3 +51,17 @@ fn node_params() {
     assert_eq!(returns_names[0].text(), "r");
     assert_eq!(returns_names[1].text(), "c");
 }
+
+#[test]
+fn labeled_expression_are_different() {
+    let root = parse("node add(a, b : int) returns (c : int); let c = a + b; tel;");
+    dbg!(&root);
+    let node = root.all_node_node().next().unwrap();
+    let body = node.body_node().unwrap();
+    let eq = body.all_equals_equation_node().next().unwrap();
+    let rhs = eq.expression_node().unwrap();
+    let addition = rhs.unwrap_add_expression_node();
+    let left = addition.left().unwrap();
+    let right = addition.right().unwrap();
+    assert!(left != right);
+}
