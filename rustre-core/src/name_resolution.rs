@@ -1,6 +1,21 @@
 use rustre_parser::ast::*;
 use yeter::Database;
 
+/// **Query** Resolves a type declaration by name
+#[yeter::query]
+pub fn resolve_type_decl(db: &Database, name: IdNode) -> Option<OneTypeDeclNode> {
+    let name = name.ident()?;
+    let name = name.text();
+
+    let files = super::parsed_files(db);
+
+    files
+        .iter()
+        .flat_map(|root| root.all_type_decl_node())
+        .flat_map(|decl| decl.all_one_type_decl_node())
+        .find(|decl| decl.id_node().and_then(|n| n.ident()).filter(|i| i.text() == name).is_some())
+}
+
 // TODO handle packages correctly
 #[derive(Clone, Debug, Hash)]
 pub struct NameResolveQuery {

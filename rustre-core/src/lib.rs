@@ -21,7 +21,6 @@ pub fn driver() -> Database {
     let mut db = Database::new();
     db.register_impl::<parse_file>();
     db.register::<_, files>(|_db, ()| vec![]);
-    db.register_impl::<types::type_check_query>();
     db.register::<_, find_node>(|db, (node_name,)| {
         for file in &*files(db) {
             let ast = parse_file(db, file.clone());
@@ -40,9 +39,14 @@ pub fn driver() -> Database {
     db.register_impl::<get_signature>();
 
     // mod name_resolution
+    db.register_impl::<name_resolution::resolve_type_decl>();
     db.register_impl::<name_resolution::resolve_const_node>();
     db.register_impl::<name_resolution::resolve_const_expr_node>();
     db.register_impl::<name_resolution::resolve_runtime_node>();
+
+    // mod types
+    db.register_impl::<types::type_of_ast_type>();
+    db.register_impl::<types::type_check_query>();
 
     db
 }

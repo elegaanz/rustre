@@ -1,7 +1,13 @@
-use rustre_parser::ast::ExpressionNode;
+use yeter::Database;
+use rustre_parser::ast::{AstToken, ExpressionNode, NodeNode, TypeNode};
 
-#[derive(PartialEq, Eq)]
+#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub enum Type {
+    /// Returned when an identifier cannot be resolved, or from an operator when it cannot resolve
+    /// its type due to an operand being unknown to.
+    #[default]
+    Unknown,
+
     Boolean,
     Integer,
     Real,
@@ -42,6 +48,34 @@ pub fn type_check_query(db: &yeter::Database, node_name: String) -> Result<Type,
     
 
     todo!()
+}
+
+#[yeter::query]
+pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNode) -> Type {
+    let scalar = if type_node.bool().is_some() {
+        Type::Boolean
+    } else if type_node.int().is_some() {
+        Type::Integer
+    } else if type_node.real().is_some() {
+        Type::Real
+    } else if let Some(id) = type_node.id_node() {
+        let decl = crate::name_resolution::resolve_type_decl(db, id.clone());
+
+        eprintln!("cannot resolve type {id:?}"); // TODO emit
+
+        match decl.as_ref() {
+            None => Type::Unknown,
+            Some(decl) => decl.type_node().map(|t| type_of_ast_type(db, node, t.clone())).unwrap_or_default(),
+        }
+    } else {
+        Type::Unknown
+    };
+
+    if let Some(power) = type_node.power() {
+        todo!("const-eval array length ({power:?}) using {type_node:?}");
+    } else {
+        scalar
+    }
 }
 
 pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Result<Type, ()> {
