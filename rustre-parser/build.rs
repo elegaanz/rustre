@@ -184,6 +184,8 @@ impl Generator {
         writeln!(self.out, "use crate::ast::AstNode;").ok();
         writeln!(self.out, "use crate::ast::AstToken;").ok();
         writeln!(self.out, "use crate::lexer::Token;").ok();
+        writeln!(self.out, "use std::cmp::{{Ord, Ordering, PartialOrd}};").ok();
+        writeln!(self.out, "use std::fmt::Debug;").ok();
         writeln!(self.out).ok();
     }
 
@@ -193,15 +195,15 @@ impl Generator {
             writeln!(self.out, "\n// {}\n", kind).ok();
             match node.def {
                 Adt::Struct(struc) => {
-                    let (ast, syntax) = if struc.is_token {
-                        ("AstToken", "SyntaxToken")
+                    let (ast, syntax, derive, needs_manual_debug) = if struc.is_token {
+                        ("AstToken", "SyntaxToken", "Debug, ", false)
                     } else {
-                        ("AstNode", "SyntaxNode")
+                        ("AstNode", "SyntaxNode", "", true)
                     };
                     if struc.is_token {
                         writeln!(self.out, "/// Token").ok();
                     }
-                    writeln!(self.out, "#[derive(Debug, Clone, PartialEq, Eq, Hash)]").ok();
+                    writeln!(self.out, "#[derive({derive}Clone, PartialEq, Eq, Hash)]").ok();
                     writeln!(self.out, "pub struct {} {{", kind).ok();
                     writeln!(self.out, "    pub(crate) syntax: {},", syntax).ok();
                     writeln!(self.out, "}}").ok();
@@ -234,6 +236,31 @@ impl Generator {
                     writeln!(self.out, "        Self::cast(syntax).expect(\"Failed to cast to {}\")", kind).ok();
                     writeln!(self.out, "    }}").ok();
                     writeln!(self.out, "}}").ok();
+
+                    if needs_manual_debug {
+                        // impl Debug
+                        writeln!(self.out).ok();
+                        writeln!(self.out, "impl std::fmt::Debug for {} {{", kind).ok();
+                        writeln!(self.out, "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{").ok();
+                        writeln!(self.out, "        super::debug_ast_node(self, f, {:?})", kind).ok();
+                        writeln!(self.out, "    }}").ok();
+                        writeln!(self.out, "}}").ok();
+                    }
+
+                    // impl Ord
+                    writeln!(self.out).ok();
+                    writeln!(self.out, "impl PartialOrd for {} {{", kind).ok();
+                    writeln!(self.out, "    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {{").ok();
+                    writeln!(self.out, "        self.syntax().index().partial_cmp(&other.syntax().index())").ok();
+                    writeln!(self.out, "    }}").ok();
+                    writeln!(self.out, "}}").ok();
+                    writeln!(self.out).ok();
+                    writeln!(self.out, "impl Ord for {} {{", kind).ok();
+                    writeln!(self.out, "    fn cmp(&self, other: &Self) -> Ordering {{").ok();
+                    writeln!(self.out, "        self.syntax().index().cmp(&other.syntax().index())").ok();
+                    writeln!(self.out, "    }}").ok();
+                    writeln!(self.out, "}}").ok();
+
                     if !struc.is_fields.is_empty() || !struc.list_fields.is_empty() || !struc.optional_fields.is_empty() || !struc.unique_fields.is_empty() {
                         writeln!(self.out).ok();
                         writeln!(self.out, "impl {} {{", kind).ok();
@@ -280,7 +307,7 @@ impl Generator {
                     }
                 }
                 Adt::Enum(variants) => {
-                    writeln!(self.out, "#[derive(Debug, Clone, PartialEq, Eq, Hash)]").ok();
+                    writeln!(self.out, "#[derive(Clone, PartialEq, Eq, Hash)]").ok();
                     writeln!(self.out, "pub enum {} {{", kind).ok();
                     for name in &variants {
                         writeln!(self.out, "    {}({}),", name, name).ok();
@@ -319,6 +346,29 @@ impl Generator {
                     writeln!(self.out, "        Self::cast(syntax).expect(\"Failed to cast to {}\")", kind).ok();
                     writeln!(self.out, "    }}").ok();
                     writeln!(self.out, "}}").ok();
+
+                    // impl Debug
+                    writeln!(self.out).ok();
+                    writeln!(self.out, "impl Debug for {} {{", kind).ok();
+                    writeln!(self.out, "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{").ok();
+                    writeln!(self.out, "        super::debug_ast_node(self, f, {:?})", kind).ok();
+                    writeln!(self.out, "    }}").ok();
+                    writeln!(self.out, "}}").ok();
+
+                    // impl Ord
+                    writeln!(self.out).ok();
+                    writeln!(self.out, "impl PartialOrd for {} {{", kind).ok();
+                    writeln!(self.out, "    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {{").ok();
+                    writeln!(self.out, "        self.syntax().index().partial_cmp(&other.syntax().index())").ok();
+                    writeln!(self.out, "    }}").ok();
+                    writeln!(self.out, "}}").ok();
+                    writeln!(self.out).ok();
+                    writeln!(self.out, "impl Ord for {} {{", kind).ok();
+                    writeln!(self.out, "    fn cmp(&self, other: &Self) -> Ordering {{").ok();
+                    writeln!(self.out, "        self.syntax().index().cmp(&other.syntax().index())").ok();
+                    writeln!(self.out, "    }}").ok();
+                    writeln!(self.out, "}}").ok();
+
                     writeln!(self.out).ok();
                     writeln!(self.out, "impl {} {{", kind).ok();
                     for name in variants {

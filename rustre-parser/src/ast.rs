@@ -65,6 +65,10 @@ pub trait AstToken {
     }
 }
 
+fn debug_ast_node<N: AstNode>(node: &N, f: &mut std::fmt::Formatter<'_>, name: &str) -> std::fmt::Result {
+    write!(f, "{}@{:?}", name, node.syntax().text_range())
+}
+
 // Additional methods that the build script can't generate
 
 impl NodeProfileNode {
