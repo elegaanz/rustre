@@ -892,9 +892,7 @@ checksum = "09041cd90cf85f7f8b2df60c646f853b7f535ce68f85244eb6731cf89fa498ec"
 
 [[package]]
 name = "yeter"
-version = "0.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "841ae69683743a75bfa7d8526cc7c5a2697a45a5d2d162ceecf8e77d22d58b04"
+version = "0.5.0"
 dependencies = [
  "state",
  "yeter-macros",
@@ -902,9 +900,7 @@ dependencies = [
 
 [[package]]
 name = "yeter-macros"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "971ad0f936fce134fb5e90bd93e749aadb75fc6647963f916b870fa4d0a44f71"
+version = "0.4.0"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",

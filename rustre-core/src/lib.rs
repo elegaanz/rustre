@@ -4,6 +4,9 @@
 
 use std::path::PathBuf;
 
+use yeter;
+
+pub mod diagnostics;
 pub mod expression;
 pub mod name_resolution;
 pub mod node_state;
@@ -91,10 +94,13 @@ pub struct TypedSignature {
 
 /// **Query**: Parses a given file
 #[yeter::query]
-pub fn parse_file(_db: &Database, file: SourceFile) -> Root {
+pub fn parse_file(db: &Database, file: SourceFile) -> Root {
     let source = file.text;
     // TODO: report errors
     let (root, _errors) = rustre_parser::parse(&source);
+
+    db.set::<diagnostics::file_for_root>(root.syntax(), file.path);
+
     root
 }
 
@@ -158,9 +164,7 @@ pub fn add_source_file(db: &mut Database, path: PathBuf) {
     let files = files(db);
     let mut files = (*files).clone();
     files.push(file);
-    db.register::<_, files>(move |_db, ()| {
-        files.clone() // TODO: find a way to not clone?
-    })
+    db.set::<files>((), files);
 }
 
 #[cfg(test)]
