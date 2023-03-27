@@ -45,7 +45,7 @@ OneConstantDeclNode = IdNode* TypeNode? ExpressionNode?
 // === TypeDeclRules ===
 
 TypeDeclNode = 'type' OneTypeDeclNode*
-OneTypeDeclNode = IdNode TypeNode? EnumDeclNode? StructDeclNode?
+OneTypeDeclNode = 'ident' TypeNode? EnumDeclNode? StructDeclNode?
 EnumDeclNode = 'enum' IdNode*
 StructDeclNode = 'struct' // TODO
 
