@@ -37,6 +37,7 @@ pub fn driver() -> Database {
     db.register_impl::<parsed_files>();
 
     db.register_impl::<get_signature>();
+    db.register_impl::<get_typed_signature>();
 
     // mod name_resolution
     db.register_impl::<name_resolution::resolve_type_decl>();
@@ -64,16 +65,23 @@ pub struct SourceFile {
 }
 
 impl SourceFile {
-    fn new(path: PathBuf, text: String) -> SourceFile {
+    pub fn new(path: PathBuf, text: String) -> SourceFile {
         SourceFile { path, text }
     }
 }
 
 #[derive(Clone, Debug, Hash)]
 pub struct Signature {
-    name: Option<Ident>,
-    params: Vec<TypedIdsNode>,
-    return_params: Vec<TypedIdsNode>,
+    pub name: Option<Ident>,
+    pub params: Vec<TypedIdsNode>,
+    pub return_params: Vec<TypedIdsNode>,
+}
+
+#[derive(Clone, Debug, Hash)]
+pub struct TypedSignature {
+    pub name: Option<Ident>,
+    pub params: Vec<(Ident, types::Type)>,
+    pub return_params: Vec<(Ident, types::Type)>,
 }
 
 /// **Query**: Parses a given file
@@ -114,6 +122,27 @@ pub fn get_signature(_db: &Database, node: NodeNode) -> Signature {
         name: node.id_node().and_then(|id| id.ident()),
         params: get_params(NodeProfileNode::params),
         return_params: get_params(NodeProfileNode::return_params),
+    }
+}
+
+#[yeter::query]
+pub fn get_typed_signature(db: &Database, node: NodeNode) -> TypedSignature {
+    let sig = get_signature(db, node);
+
+    let get_params = |params: &[TypedIdsNode]| {
+        params.iter().flat_map(|group| {
+            let ty = group.type_node()
+                .map(|t| types::type_of_ast_type(db, None, t))
+                .unwrap_or_default();
+
+            group.all_ident().zip(std::iter::repeat(ty.as_ref().clone()))
+        }).collect::<Vec<_>>()
+    };
+
+    TypedSignature {
+        name: sig.name.clone(),
+        params: get_params(&sig.params),
+        return_params: get_params(&sig.return_params),
     }
 }
 

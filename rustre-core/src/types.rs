@@ -1,5 +1,6 @@
 use yeter::Database;
-use rustre_parser::ast::{AstToken, ExpressionNode, NodeNode, TypeNode};
+use rustre_parser::ast::{AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode, TypeNode};
+use crate::TypedSignature;
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
 pub enum Type {
@@ -42,6 +43,10 @@ impl Type {
             _ => false,
         }
     }
+
+    pub fn is_unknown(&self) -> bool {
+        matches!(self, Self::Unknown)
+    }
 }
 
 /// **Query**: Type-checks a given node
@@ -68,11 +73,12 @@ pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNo
     } else if let Some(id) = type_node.id_node() {
         let decl = crate::name_resolution::resolve_type_decl(db, id.clone());
 
-        eprintln!("cannot resolve type {id:?}"); // TODO emit
-
         match decl.as_ref() {
-            None => Type::Unknown,
-            Some(decl) => decl.type_node().map(|t| type_of_ast_type(db, node, t.clone())).unwrap_or_default(),
+            Some(decl) => decl.type_node().map(|t| type_of_ast_type(db, node, t)).unwrap_or_default(),
+            None => {
+                eprintln!("cannot resolve type {:?}", id.ident().unwrap().text()); // TODO(diagnostics)
+                Type::Unknown
+            },
         }
     } else {
         Type::Unknown
@@ -366,6 +372,59 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Res
         ExpressionNode::ParExpressionNode(node) => {
             return type_check_expression(db, &node.expression_node().unwrap())
         }
+        ExpressionNode::CallByPosExpressionNode(expr) => {
+            let name = expr.node_ref()
+                .and_then(|r| r.id_node())
+                .and_then(|i| i.ident());
+
+            if let Some(name) = name {
+                let node_node = crate::find_node(db, name.text().into());
+
+                if let Some(node_node) = Option::clone(&node_node) {
+                    let sig = crate::get_typed_signature(db, node_node);
+                    return Ok(check_call_expression(db, expr, &sig));
+                }
+            }
+
+            return Ok(Type::Unknown);
+        }
     }
     todo!()
+}
+
+fn check_call_expression(
+    db: &Database,
+    expr: &CallByPosExpressionNode,
+    sig: &TypedSignature,
+) -> Type {
+    // Check input parameters
+    let expected = sig.params.iter().map(Some).chain(std::iter::repeat(None));
+    let found = expr.args().skip(1).map(Some).chain(std::iter::repeat(None));
+    for (expected, found) in expected.zip(found) {
+        match (expected, found) {
+            (None, None) => break,
+            (Some((_, expected_ty)), Some(found)) => {
+                if !expected_ty.is_unknown() {
+                    let found_ty = type_check_expression(db, &found).unwrap_or_default();
+                    if !found_ty.is_unknown() && expected_ty != &found_ty {
+                        eprintln!("invalid type {found_ty:?}, expected {expected_ty:?}");
+                    }
+                }
+            }
+            (Some(_expected), None) => {
+                eprintln!("missing argument");
+            }
+            (None, Some(found)) => {
+                eprintln!("unexpected argument {found:?}") // TODO(diagnostics)
+            }
+        }
+    }
+
+    // Find out returned value(s)
+    if sig.return_params.len() == 1 {
+        sig.return_params[0].1.clone()
+    } else {
+        let cloned = sig.return_params.iter().map(|(_, t)| t).cloned().collect();
+        Type::Tuple(cloned)
+    }
 }
