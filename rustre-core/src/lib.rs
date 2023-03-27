@@ -6,6 +6,7 @@ use std::path::PathBuf;
 
 pub mod expression;
 pub mod name_resolution;
+pub mod node_state;
 mod types;
 
 use rustre_parser::ast::{
@@ -44,6 +45,10 @@ pub fn driver() -> Database {
     db.register_impl::<name_resolution::resolve_const_node>();
     db.register_impl::<name_resolution::resolve_const_expr_node>();
     db.register_impl::<name_resolution::resolve_runtime_node>();
+
+    // mod node_state
+    db.register_impl::<node_state::state_of>();
+    db.register_impl::<node_state::check_node_function_state>();
 
     // mod types
     db.register_impl::<types::type_of_ast_type>();
