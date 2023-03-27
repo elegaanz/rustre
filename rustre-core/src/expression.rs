@@ -154,6 +154,9 @@ impl BakedExpression {
                     Err("expected expression inside parenthesis")
                 }
             }
+            ExpressionNode::CallByPosExpressionNode(_node) => {
+                todo!()
+            }
         }
     }
 

@@ -20,16 +20,19 @@ pub fn parse_type_decls<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'sl
 }
 
 pub fn parse_one_type_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
-    join((
-        ident::parse_lv6_id,
-        opt(join((
-            t(Equal),
-            expect(
-                alt((parse_type, parse_enum_decl, parse_struct_decl)),
-                "expected a struct/enum declaration or an existing type expression",
-            ),
-        ))),
-    ))(input)
+    node(
+        OneTypeDeclNode,
+        join((
+            ident::parse_lv6_id,
+            opt(join((
+                t(Equal),
+                expect(
+                    alt((parse_type, parse_enum_decl, parse_struct_decl)),
+                    "expected a struct/enum declaration or an existing type expression",
+                ),
+            ))),
+        ))
+    )(input)
 }
 
 fn parse_enum_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'slice, 'src> {
