@@ -298,8 +298,37 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode) -> Option<ConstValue
                 _ => todo!(),
             }
         },
-        ExpressionNode::PowerExpressionNode(_) => todo!(),
-        ExpressionNode::IfExpressionNode(_) => todo!(),
+        ExpressionNode::PowerExpressionNode(node) => {
+            let left = eval_const_node(db, node.left()?.clone())?;
+            let right = eval_const_node(db, node.right()?.clone())?;
+            match (left, right) {
+                (ConstValue::Integer(left), ConstValue::Integer(right)) => {
+                    return Some(ConstValue::Integer(left.pow(right as u32)));
+                },
+                (ConstValue::Real(left), ConstValue::Real(right)) => {
+                    return Some(ConstValue::Real(left.powf(right)));
+                },
+                (ConstValue::Integer(left), ConstValue::Real(right)) => {
+                    return Some(ConstValue::Real((left as f32).powf(right)));
+                },
+                (ConstValue::Real(left), ConstValue::Integer(right)) => {
+                    return Some(ConstValue::Real(left.powf(right as f32)));
+                },
+                _ => todo!(),
+            }
+        },
+        ExpressionNode::IfExpressionNode(node) => {
+            let cond = eval_const_node(db, node.cond()?.clone())?;
+            match cond {
+                ConstValue::Boolean(true) => {
+                    return eval_const_node(db, node.if_body()?.clone());
+                },
+                ConstValue::Boolean(false) => {
+                    return eval_const_node(db, node.else_body()?.clone());
+                },
+                _ => todo!(),
+            }
+        },
         ExpressionNode::WithExpressionNode(_) => todo!(),
         ExpressionNode::DieseExpressionNode(_) => todo!(),
         ExpressionNode::NorExpressionNode(_) => todo!(),
@@ -347,5 +376,27 @@ mod tests {
         let value = eval_const_node(&db, expr);
         let value = value.as_ref().as_ref().unwrap();
         assert_eq!(*value, crate::types::ConstValue::Integer(3));
+    }
+
+    #[test]
+    fn if_true() {
+        let mut db = crate::driver();
+        crate::add_source_contents(&mut db, String::from("const x = true; const y = if x then 1 else 2;"));
+        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
+        let expr = node.all_constant_decl_node().last().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
+        let value = eval_const_node(&db, expr);
+        let value = value.as_ref().as_ref().unwrap();
+        assert_eq!(*value, crate::types::ConstValue::Integer(1));
+    }
+
+    #[test]
+    fn if_false() {
+        let mut db = crate::driver();
+        crate::add_source_contents(&mut db, String::from("const x = false; const y = if x then 1 else 2;"));
+        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
+        let expr = node.all_constant_decl_node().last().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
+        let value = eval_const_node(&db, expr);
+        let value = value.as_ref().as_ref().unwrap();
+        assert_eq!(*value, crate::types::ConstValue::Integer(2));
     }
 }
