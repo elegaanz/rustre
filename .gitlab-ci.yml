@@ -1,4 +1,4 @@
-image: "rust:latest"
+image: "edgarogh/rustre-ci"
 
 # Cache dependencies for faster builds
 # Taken from https://gitlab.com/yvan-sraka/rust-cache-example/-/blob/main/.gitlab-ci.yml
@@ -7,7 +7,6 @@ cache:
     files:
       - Cargo.lock
   paths:
-    - /usr/local/cargo/bin
     - /usr/local/cargo/registry/index
     - /usr/local/cargo/registry/cache
     - /usr/local/cargo/git/db
@@ -21,8 +20,6 @@ cache:
 
 # Use a third party library to generate gitlab junit reports
 test:junit-report:
-  before_script:
-    - cargo install junitify
   script:
     - cargo test -- --format=json -Z unstable-options --report-time | junitify --out $CI_PROJECT_DIR/tests/
   artifacts:
