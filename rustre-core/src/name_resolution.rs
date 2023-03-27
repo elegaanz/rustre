@@ -13,7 +13,7 @@ pub fn resolve_type_decl(db: &Database, name: IdNode) -> Option<OneTypeDeclNode>
         .iter()
         .flat_map(|root| root.all_type_decl_node())
         .flat_map(|decl| decl.all_one_type_decl_node())
-        .find(|decl| decl.id_node().and_then(|n| n.ident()).filter(|i| i.text() == name).is_some())
+        .find(|decl| matches!(decl.ident(), Some(n) if n.text() == name))
 }
 
 // TODO handle packages correctly
