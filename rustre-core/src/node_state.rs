@@ -56,7 +56,7 @@ pub struct NodeState {
 impl NodeState {
     /// Returns `true` if the node associated to this [NodeState] doesn't hold any state
     pub fn is_empty(&self) -> bool {
-        self.call_sites.is_empty() && self.operators.is_empty()
+        self.call_sites.values().all(|s| s.is_empty()) && self.operators.is_empty()
     }
 
     fn push_call_site(&mut self, call_site: CallByPosExpressionNode, sub_state: Rc<NodeState>) {
