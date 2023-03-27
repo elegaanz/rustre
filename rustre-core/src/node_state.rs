@@ -173,7 +173,7 @@ fn extract_state(
                 .and_then(|n| n.id_node())
                 .and_then(|i| i.ident())
             {
-                let sub_node = crate::find_node(db, node_name.text().into());
+                let sub_node = crate::name_resolution::find_node(db, node_name.text().into());
                 let sub_state = Option::clone(&sub_node).map(|n| state_of(db, n));
                 builder.push_call_site(e.clone(), sub_state.unwrap_or_default());
             }

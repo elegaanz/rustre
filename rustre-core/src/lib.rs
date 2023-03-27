@@ -21,9 +21,6 @@ pub fn driver() -> Database {
     Database::new()
 }
 
-#[yeter::query]
-fn find_node(db: &Database, node_name: String) -> Option<NodeNode>;
-
 // Inputs
 // TODO: maybe they should be moved to their own module
 

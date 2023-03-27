@@ -52,7 +52,7 @@ impl Type {
 /// **Query**: Type-checks a given node
 #[yeter::query]
 pub fn type_check_query(db: &yeter::Database, node_name: String) -> Result<Type, ()> {
-    let _node = crate::find_node(db, node_name);
+    let _node = crate::name_resolution::find_node(db, node_name);
     //for equals_equation in node.unwrap().body_node().unwrap().all_equals_equation_node() {
         //TODO Left node
 
@@ -378,7 +378,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Res
                 .and_then(|i| i.ident());
 
             if let Some(name) = name {
-                let node_node = crate::find_node(db, name.text().into());
+                let node_node = crate::name_resolution::find_node(db, name.text().into());
 
                 if let Some(node_node) = Option::clone(&node_node) {
                     let sig = crate::get_typed_signature(db, node_node);
