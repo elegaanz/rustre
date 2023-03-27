@@ -18,7 +18,14 @@ pub enum Type {
     Array {
         elem: Box<Type>,
         size: usize,
-    }
+    },
+
+    /// Tuple value or return type of a function with multiple (or 0) values
+    ///
+    /// A tuple **cannot** contain only one element, but **may** be empty. More specifically, if a
+    /// function returns exactly one value, it **mustn't** be typed as a `ReturnTuple` as this would
+    /// prevent it from being used as an operand to pretty much all operators.
+    Tuple(Vec<Type>),
 }
 
 impl Type {
