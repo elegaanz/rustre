@@ -74,7 +74,7 @@ pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNo
         let decl = crate::name_resolution::resolve_type_decl(db, id.clone());
 
         match decl.as_ref() {
-            Some(decl) => decl.type_node().map(|t| type_of_ast_type(db, node, t)).unwrap_or_default(),
+            Some(decl) => Type::clone(&decl.type_node().map(|t| type_of_ast_type(db, node, t)).unwrap_or_default()),
             None => {
                 eprintln!("cannot resolve type {:?}", id.ident().unwrap().text()); // TODO(diagnostics)
                 Type::Unknown

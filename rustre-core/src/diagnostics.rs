@@ -10,15 +10,15 @@ pub struct Span {
 }
 
 #[yeter::query]
-pub fn file_for_root(db: yeter::Database, root: SyntaxNode) -> PathBuf;
+pub fn file_for_root(db: yeter::Database, root: SyntaxNode) -> Option<PathBuf>;
 
 impl Span {
     fn of(db: &yeter::Database, syntax_node: &SyntaxNode) -> Self {
         let range = syntax_node.text_range();
         let root = syntax_node.ancestors().last().unwrap_or(syntax_node.clone());
-        let file = file_for_root(db, root);
+        let file = Option::clone(&file_for_root(db, root)).expect("AST not bound to a file");
         Span {
-            file: file.to_path_buf(),
+            file,
             start: range.start().into(),
             end: range.end().into(),
         }

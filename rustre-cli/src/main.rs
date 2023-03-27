@@ -49,7 +49,9 @@ fn main() -> Result<(), u8> {
 
                     let mut driver = rustre_core::driver();
                     rustre_core::add_source_file(&mut driver, path);
-                    for file in &*rustre_core::files(&driver) {
+                    let files = rustre_core::files(&driver);
+                    let files = files.as_ref().as_deref().unwrap_or_default();
+                    for file in files {
                         dbg!(&file.path);
                         let ast = rustre_core::parse_file(&driver, file.clone());
                         print(0, NodeOrToken::Node(ast.syntax().clone()));

@@ -4,8 +4,6 @@
 
 use std::path::PathBuf;
 
-use yeter;
-
 pub mod diagnostics;
 pub mod expression;
 pub mod name_resolution;
@@ -13,51 +11,14 @@ pub mod node_state;
 mod types;
 
 use rustre_parser::ast::{
-    AstToken, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
+    AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
 };
 use std::rc::Rc;
 use yeter::Database;
 
-/// Builds a new compiler driver, that corresponds to a compilation session.
-///
-/// This function should only be called once.
+/// Builds a new compiler driver, that corresponds to a compilation session
 pub fn driver() -> Database {
-    let mut db = Database::new();
-    db.register_impl::<parse_file>();
-    db.register::<_, files>(|_db, ()| vec![]);
-    db.register::<_, find_node>(|db, (node_name,)| {
-        for file in &*files(db) {
-            let ast = parse_file(db, file.clone());
-            for node in ast.all_node_node() {
-                if node.id_node()?.ident()?.text() == node_name {
-                    return Some(node.clone());
-                }
-            }
-        }
-        None
-    });
-
-    db.register::<_, files>(|_db, ()| vec![]);
-    db.register_impl::<parsed_files>();
-
-    db.register_impl::<get_signature>();
-    db.register_impl::<get_typed_signature>();
-
-    // mod name_resolution
-    db.register_impl::<name_resolution::resolve_type_decl>();
-    db.register_impl::<name_resolution::resolve_const_node>();
-    db.register_impl::<name_resolution::resolve_const_expr_node>();
-    db.register_impl::<name_resolution::resolve_runtime_node>();
-
-    // mod node_state
-    db.register_impl::<node_state::state_of>();
-    db.register_impl::<node_state::check_node_function_state>();
-
-    // mod types
-    db.register_impl::<types::type_of_ast_type>();
-    db.register_impl::<types::type_check_query>();
-
-    db
+    Database::new()
 }
 
 #[yeter::query]
@@ -99,21 +60,26 @@ pub fn parse_file(db: &Database, file: SourceFile) -> Root {
     // TODO: report errors
     let (root, _errors) = rustre_parser::parse(&source);
 
-    db.set::<diagnostics::file_for_root>(root.syntax(), file.path);
+    db.set::<diagnostics::file_for_root>((root.syntax().clone(),), Some(file.path));
 
     root
 }
 
 /// **Query**: Returns a list of all directly and indirectly included files in the Lustre program
 #[yeter::query]
-pub fn files(_db: &Database) -> Vec<SourceFile>;
+pub fn files(_db: &Database) -> Option<Vec<SourceFile>>;
 
 #[yeter::query]
 fn parsed_files(db: &Database) -> Vec<Rc<Root>> {
-    files(db)
-        .iter()
-        .map(|s| parse_file(db, s.clone()))
-        .collect::<Vec<_>>()
+    let files = files(db);
+    if let Some(files) = files.as_ref() {
+        files
+            .iter()
+            .map(|s| parse_file(db, s.clone()))
+            .collect::<Vec<_>>()
+    } else {
+        vec![]
+    }
 }
 
 #[yeter::query]
@@ -162,9 +128,9 @@ pub fn add_source_file(db: &mut Database, path: PathBuf) {
     let contents = std::fs::read_to_string(&path).unwrap(); // TODO: report the error
     let file = SourceFile::new(path, contents);
     let files = files(db);
-    let mut files = (*files).clone();
+    let mut files = (*files).clone().unwrap_or_default();
     files.push(file);
-    db.set::<files>((), files);
+    db.set::<files>((), Some(files));
 }
 
 #[cfg(test)]
@@ -175,7 +141,9 @@ mod tests {
     fn parse_query() {
         let mut driver = super::driver();
         super::add_source_file(&mut driver, Path::new("../tests/stable.lus").to_owned());
-        for file in &*super::files(&driver) {
+        let files = super::files(&driver);
+        let files = files.as_ref().as_deref().unwrap_or_default();
+        for file in files {
             let ast = super::parse_file(&driver, file.clone());
             assert_eq!(ast.all_include_statement().count(), 1);
         }
