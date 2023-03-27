@@ -32,8 +32,8 @@ pub fn find_node(db: &Database, node_name: String) -> Option<NodeNode> {
 // TODO handle packages correctly
 #[derive(Clone, Debug, Hash)]
 pub struct NameResolveQuery {
-    ident: IdNode,
-    in_node: Option<NodeNode>,
+    pub ident: IdNode,
+    pub in_node: Option<NodeNode>,
 }
 
 pub enum ResolvedRuntimeNode<Var, Input = Var> {
