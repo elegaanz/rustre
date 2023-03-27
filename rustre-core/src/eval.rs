@@ -8,24 +8,24 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode) -> Option<ConstValue
     // TODO : Parse constant nodes values from string better
     match node {
         ExpressionNode::ConstantNode(node) => {
-            if(node.r#true().is_some()) {
+            if node.r#true().is_some() {
                 return Some(ConstValue::Boolean(true));
             }
-            if(node.r#false().is_some()) {
+            if node.r#false().is_some() {
                 return Some(ConstValue::Boolean(false));
             }
-            if(node.i_const().is_some()) {
+            if node.i_const().is_some() {
                 return Some(ConstValue::Integer(node.i_const().unwrap().text().parse::<i32>().unwrap()));
             }
-            if(node.r_const().is_some()) {
+            if node.r_const().is_some() {
                 return Some(ConstValue::Real(node.r_const().unwrap().text().parse::<f32>().unwrap()));
             }
         },
         ExpressionNode::IdentExpressionNode(node) => {
             let ident = node.id_node().unwrap();
-            let node = name_resolution::resolve_const_node(db, NameResolveQuery{ident: ident.clone(), in_node: None});
+            let node = name_resolution::resolve_const_expr_node(db, NameResolveQuery{ident: ident.ident().unwrap(), in_node: None});
             let node = node.as_ref().as_ref().unwrap();
-            return eval_const_node(db, node.expression_node().unwrap().clone());
+            return eval_const_node(db, node.clone());
         },
         ExpressionNode::NotExpressionNode(node) => {
             let value = eval_const_node(db, node.operand()?.clone())?;
@@ -312,12 +312,15 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode) -> Option<ConstValue
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use crate::files;
+
     use super::eval_const_node;
 
     #[test]
     fn one_plus_one() {
-        let db = crate::driver();
-        let node = crate::parse_file(&db, crate::SourceFile { path: PathBuf::new(), text: String::from("const x = 1 + 1;") });
+        let mut db = crate::driver();
+        crate::add_source_contents(&mut db, String::from("const x = 1 + 1;"));
+        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
         let expr = node.all_constant_decl_node().next().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
         let value = eval_const_node(&db, expr);
         let value = value.as_ref().as_ref().unwrap();
@@ -336,8 +339,10 @@ mod tests {
 
     #[test]
     fn one_plus_x() {
-        let db = crate::driver();
-        let node = crate::parse_file(&db, crate::SourceFile { path: PathBuf::new(), text: String::from("const x = 1; const y = 2 + x;") });
+        let mut db = crate::driver();
+        //let node = crate::parse_file(&db, crate::SourceFile { path: PathBuf::new(), text: String::from("const x = 1; const y = 2 + x;") });
+        crate::add_source_contents(&mut db, String::from("const x = 1;\nconst y = 2 + x;\n"));
+        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
         let expr = node.all_constant_decl_node().last().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
         let value = eval_const_node(&db, expr);
         let value = value.as_ref().as_ref().unwrap();

@@ -164,6 +164,16 @@ pub fn add_source_file(db: &Database, path: PathBuf) {
     db.set::<files>((), Some(files));
 }
 
+pub fn add_source_contents(db: &mut Database, contents: String) {
+    let file = SourceFile::new(PathBuf::new(), contents);
+    let files = files(db);
+    let mut files = (*files).clone();
+    files.push(file);
+    db.register::<_, files>(move |_db, ()| {
+        files.clone() // TODO: find a way to not clone?
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use std::path::Path;
