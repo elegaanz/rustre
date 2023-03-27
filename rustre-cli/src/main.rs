@@ -55,8 +55,10 @@ fn main() -> Result<(), u8> {
                         print(0, NodeOrToken::Node(ast.syntax().clone()));
 
                         for node in ast.all_node_node() {
-                            let sig = rustre_core::get_signature(&driver, node);
+                            let sig = rustre_core::get_typed_signature(&driver, node.clone());
                             dbg!(sig);
+                            let state = rustre_core::node_state::state_of(&driver, node);
+                            dbg!(state);
                         }
                     }
 
