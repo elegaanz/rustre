@@ -154,132 +154,124 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             }
         },
         ExpressionNode::NotExpressionNode(node) => {
-            return type_check_expression(db, &node.operand().unwrap(), in_node);
+            type_check_expression(db, &node.operand().unwrap(), in_node)
         },
         ExpressionNode::NegExpressionNode(node) => {
             let type_exp = type_check_expression(db, &node.operand().unwrap(), in_node);
-            return match type_exp {
+            match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 Ok(Type::Real) => Ok(Type::Real),
                 _ => Err(()),
-            };
+            }
         },
         ExpressionNode::PreExpressionNode(node) => {
             let type_exp = type_check_expression(db, &node.operand().unwrap(), in_node);
-            return match type_exp {
+            match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 Ok(Type::Real) => Ok(Type::Real),
                 _ => Err(()),
-            };
+            }
         },
         ExpressionNode::CurrentExpressionNode(node) => {
             let type_exp = type_check_expression(db, &node.operand().unwrap(), in_node);
-            return match type_exp {
+            match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 Ok(Type::Real) => Ok(Type::Real),
                 _ => Err(()),
-            };
+            }
         },
         ExpressionNode::IntExpressionNode(node) => {
             let type_exp = type_check_expression(db, &node.operand().unwrap(), in_node);
-            return match type_exp {
+            match type_exp {
                 Ok(Type::Integer) => Ok(Type::Integer),
                 _ => Err(()),
-            };
+            }
         },
         ExpressionNode::RealExpressionNode(node) => {
             let type_exp = type_check_expression(db, &node.operand().unwrap(), in_node);
-            return match type_exp {
+            match type_exp {
                 Ok(Type::Real) => Ok(Type::Real),
                 _ => Err(()),
-            };
+            }
         },
         ExpressionNode::WhenExpressionNode(_) => todo!(),
         ExpressionNode::FbyExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == right_node_type {
-                return left_node_type;
+                left_node_type
             } else {
-                return Err(());
+                Err(())
             }
         },
         ExpressionNode::ArrowExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == right_node_type {
-                return left_node_type;
+                left_node_type
             } else {
-                return Err(());
+                Err(())
             }
         },
         ExpressionNode::AndExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
-            if left_node_type != Ok(Type::Boolean) {
-                return Err(());
-            } else if right_node_type != Ok(Type::Boolean) {
-                return Err(());
+            if left_node_type != Ok(Type::Boolean) || right_node_type != Ok(Type::Boolean) {
+                Err(())
             } else {
-                return Ok(Type::Boolean);
+                Ok(Type::Boolean)
             }
         },
         ExpressionNode::OrExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
-            if left_node_type != Ok(Type::Boolean) {
-                return Err(());
-            } else if right_node_type != Ok(Type::Boolean) {
-                return Err(());
+            if left_node_type != Ok(Type::Boolean) || right_node_type != Ok(Type::Boolean) {
+                Err(())
             } else {
-                return Ok(Type::Boolean);
+                Ok(Type::Boolean)
             }
         },
         ExpressionNode::XorExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
-            if left_node_type != Ok(Type::Boolean) {
-                return Err(());
-            } else if right_node_type != Ok(Type::Boolean) {
-                return Err(());
+            if left_node_type != Ok(Type::Boolean) || right_node_type != Ok(Type::Boolean) {
+                Err(())
             } else {
-                return Ok(Type::Boolean);
+                Ok(Type::Boolean)
             }
         },
         ExpressionNode::ImplExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
-            if left_node_type != Ok(Type::Boolean) {
-                return Err(());
-            } else if right_node_type != Ok(Type::Boolean) {
-                return Err(());
+            if left_node_type != Ok(Type::Boolean) || right_node_type != Ok(Type::Boolean) {
+                Err(())
             } else {
-                return Ok(Type::Boolean);
+                Ok(Type::Boolean)
             }
         },
         ExpressionNode::EqExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == right_node_type {
-                return left_node_type;
+                left_node_type
             } else {
-                return Err(());
+                Err(())
             }
         },
         ExpressionNode::NeqExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == right_node_type {
-                return left_node_type;
+                left_node_type
             } else {
-                return Err(());
+                Err(())
             }
         },
         ExpressionNode::LtExpressionNode(node) => {
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -290,7 +282,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -301,7 +293,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -312,7 +304,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -323,7 +315,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -334,7 +326,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -345,7 +337,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -356,7 +348,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -367,7 +359,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let left_node_type = type_check_expression(db, &node.left().unwrap(), in_node);
             let right_node_type = type_check_expression(db, &node.right().unwrap(), in_node);
             if left_node_type == Ok(Type::Integer) && right_node_type == Ok(Type::Integer) {
-                return Ok(Type::Integer);
+                Ok(Type::Integer)
             } else if left_node_type == Ok(Type::Real) && right_node_type == Ok(Type::Real) {
                 return Ok(Type::Real);
             } else {
@@ -380,7 +372,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             if left_node_type.is_array() || right_node_type.is_array() ||
                 left_node_type.is_function() || right_node_type.is_function() ||
                 left_node_type == Type::Boolean || right_node_type == Type::Boolean {
-                return Err(());
+                Err(())
             } else if left_node_type == Type::Integer && right_node_type == Type::Integer {
                 return Ok(Type::Integer);
             } else {
@@ -391,18 +383,18 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             let if_body_type = type_check_expression(db, &node.if_body().unwrap(), in_node)?;
             let else_body_type = type_check_expression(db, &node.else_body().unwrap(), in_node)?;
             if if_body_type == else_body_type {
-                return Ok(if_body_type);
+                Ok(if_body_type)
             } else {
-                return Err(());
+                Err(())
             }
         },
         ExpressionNode::WithExpressionNode(node) => {
             let with_body_type = type_check_expression(db, &node.with_body().unwrap(), in_node)?;
             let else_body_type = type_check_expression(db, &node.else_body().unwrap(), in_node)?;
             if with_body_type == else_body_type {
-                return Ok(with_body_type);
+                Ok(with_body_type)
             } else {
-                return Err(());
+                Err(())
             }
         },
         ExpressionNode::DieseExpressionNode(node) => {
@@ -412,7 +404,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
                     return Err(());
                 }
             }
-            return Ok(Type::Boolean);
+            Ok(Type::Boolean)
         },
         ExpressionNode::NorExpressionNode(node) => {
             let node_list = node.list().unwrap().all_expression_node();
@@ -421,22 +413,22 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
                     return Err(());
                 }
             }
-            return Ok(Type::Boolean);
+            Ok(Type::Boolean)
         },
         ExpressionNode::IdentExpressionNode(node) => {
             let ident = node.id_node().unwrap().ident().unwrap();
             let query = NameResolveQuery {ident, in_node: in_node.clone()};
             let resolved_node = resolve_runtime_node(db, query);
             match *resolved_node {
-                Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => return Ok(parse_type(const_decl_node.type_node().unwrap())),
+                Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => Ok(parse_type(const_decl_node.type_node().unwrap())),
                 Some(ResolvedRuntimeNode::Param(ref var_decl_node)) |
                 Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node)) |
-                Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => return Ok(parse_type(var_decl_node.type_node().unwrap())),
+                Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => Ok(parse_type(var_decl_node.type_node().unwrap())),
                 None => todo!(),
             }
         },
         ExpressionNode::ParExpressionNode(node) => {
-            return type_check_expression(db, &node.expression_node().unwrap(), in_node)
+            type_check_expression(db, &node.expression_node().unwrap(), in_node)
         }
         ExpressionNode::CallByPosExpressionNode(expr) => {
             let name = expr.node_ref()
@@ -534,15 +526,15 @@ fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<N
             let query = NameResolveQuery {ident: ident.ident().unwrap().clone(), in_node: in_node.clone()};
             let resolved_node = resolve_runtime_node(db, query);
             match *resolved_node {
-                Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => return Ok(parse_type(const_decl_node.type_node().unwrap())),
+                Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => Ok(parse_type(const_decl_node.type_node().unwrap())),
                 Some(ResolvedRuntimeNode::Param(ref var_decl_node)) |
                 Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node)) |
-                Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => return Ok(parse_type(var_decl_node.type_node().unwrap())),
+                Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => Ok(parse_type(var_decl_node.type_node().unwrap())),
                 None => todo!(),
             }
         },
         LeftItemNode::LeftTableAccessNode(table_item) => {
-            return type_check_left(db, &table_item.left_item_node().unwrap(), in_node);
+            type_check_left(db, &table_item.left_item_node().unwrap(), in_node)
         },
         LeftItemNode::LeftFieldAccessNode(_) => {
             todo!("Structures are not supported yet.")
@@ -552,11 +544,11 @@ fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<N
 
 fn parse_type(node: TypeNode) -> Type {
     if node.bool().is_some() {
-        return Type::Boolean;
+        Type::Boolean
     } else if node.int().is_some() {
-        return Type::Integer;
+        Type::Integer
     } else if node.real().is_some() {
-        return Type::Real;
+        Type::Real
     } else {
         todo!("Arrays, functions and structures are not supported yet.")
     }
