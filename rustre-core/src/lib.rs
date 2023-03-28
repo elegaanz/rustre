@@ -4,6 +4,7 @@
 
 use std::path::PathBuf;
 use crate::diagnostics::{Diagnostic, Level, Span};
+
 use rustre_parser::ast::{
     AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
 };

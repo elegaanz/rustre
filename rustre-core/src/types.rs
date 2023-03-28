@@ -89,18 +89,14 @@ impl std::fmt::Display for Type {
 pub fn type_check_query<'a>(db: &yeter::Database, node_name: String, in_node: &'a Option<NodeNode>) -> Result<Type, ()> {
     let body_node = crate::name_resolution::find_node(db, node_name);
     let body_node = body_node.as_ref().as_ref().unwrap().body_node();
-    // for node in body_node.as_ref().unwrap().all_equals_equation_node() {
-    //     let left_type = type_check_left(db, &node.left_node().unwrap(), in_node);
-    //     let expr_type = node.expression_node().unwrap();
-    //     if left_type == expr_type {
-    //         return
-    //     } else {
-    //         todo!()
-    //     }
-    // }
-    // for node in body_node.unwrap().all_assert_equation_node() {
-    //     todo!()
-    // }
+    // Check all equations
+    for node in body_node.unwrap().all_equals_equation_node() {
+        let lefts = node.left_node().unwrap().left_item_list_node().unwrap().all_left_item_node();
+        let rights = node.expression_node();
+        let lefts: Vec<_> = lefts.collect();
+        let rights = node.expression_node().unwrap();
+    }
+    // Check all assertions
     todo!()
 }
 
