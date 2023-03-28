@@ -495,7 +495,7 @@ impl rowan::Language for LustreLang {
     }
 }
 
-impl crate::rowan_nom::RowanNomLanguage for LustreLang {
+impl rowan_nom::RowanNomLanguage for LustreLang {
     fn is_trivia(kind: Self::Kind) -> bool {
         kind.is_trivia()
     }

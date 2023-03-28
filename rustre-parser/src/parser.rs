@@ -15,17 +15,17 @@
 //! [spec]: https://www-verimag.imag.fr/DIST-TOOLS/SYNCHRONE/lustre-v6/doc/lv6-ref-man.pdf
 
 use super::ParserError as RustreParseError;
-use crate::rowan_nom::*;
+use rowan_nom::*;
 
 use crate::lexer::Token::{self, *};
 
 type Lang = crate::LustreLang;
-type Children = crate::rowan_nom::Children<Lang, super::ParserError>;
-type Input<'slice, 'src> = crate::rowan_nom::Input<'slice, 'src, Lang>;
+type Children = rowan_nom::Children<Lang, super::ParserError>;
+type Input<'slice, 'src> = rowan_nom::Input<'slice, 'src, Lang>;
 type IResult<'slice, 'src, E = super::ParserError> =
-    crate::rowan_nom::IResult<'slice, 'src, Lang, super::ParserError, E>;
+    rowan_nom::IResult<'slice, 'src, Lang, super::ParserError, E>;
 type RootIResult<'slice, 'src, E = super::ParserError> =
-    crate::rowan_nom::RootIResult<'slice, 'src, Lang, super::ParserError, E>;
+    rowan_nom::RootIResult<'slice, 'src, Lang, super::ParserError, E>;
 
 // Utils
 

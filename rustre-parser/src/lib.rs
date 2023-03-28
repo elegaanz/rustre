@@ -5,16 +5,12 @@
 //! [impl]: https://gricad-gitlab.univ-grenoble-alpes.fr/verimag/synchrone/lustre-v6/
 
 pub mod ast;
+mod ast_tests;
 pub mod lexer;
 pub mod parser;
-mod ast_tests;
-
-// TODO extract to its own library
-#[doc(hidden)]
-mod rowan_nom;
 
 use crate::lexer::{Lexer, Token};
-use crate::rowan_nom::RowanNomError;
+use rowan_nom::RowanNomError;
 use std::ops::Range;
 
 /// Marker, non-constructible type that implements [`rowan::Language`] for Lustre
