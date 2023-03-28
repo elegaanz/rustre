@@ -1,5 +1,8 @@
+mod diagnostics;
+
 use std::path::PathBuf;
 
+use crate::diagnostics::print_diagnostics;
 use clap::{Parser, Subcommand};
 use rowan::NodeOrToken;
 use rustre_parser::{ast::AstNode, lexer::Token, SyntaxNode, SyntaxToken};
@@ -26,6 +29,15 @@ enum Commands {
         /// Node to display as a graph
         #[clap(long, short)]
         node: String,
+    },
+
+    /// Check that a Lustre program is correct
+    Check {
+        file: PathBuf,
+
+        #[clap(long, short = 'W')]
+        /// If set, rustre will return a non-zero status code when it encounters a warning
+        deny_warnings: bool,
     },
 
     // Compiles file
@@ -64,23 +76,6 @@ fn main() -> Result<(), u8> {
                         }
                     }
 
-                    // TODO: re-introduce error handling when they are reported with salsa
-                    /*let no_errors = errors.is_empty();
-
-                    for err in errors {
-                        Report::<(String, Range<usize>)>::build(ReportKind::Error, filename.clone(), err.span.start())
-                            .with_message(err.msg)
-                            .with_label(Label::new((filename.clone(), err.span)))
-                            .finish()
-                            .print(ariadne::sources(vec![(filename.clone(), &contents)]))
-                            .unwrap();
-                    }
-
-                    if no_errors {
-                        Ok(())
-                    } else {
-                        Err(1)
-                    }*/
                     Ok(())
                 }
                 None => {
@@ -91,6 +86,14 @@ fn main() -> Result<(), u8> {
         }
         Commands::Dot { file: _, node: _ } => {
             todo!()
+        }
+        Commands::Check {
+            file,
+            deny_warnings,
+        } => {
+            let db = rustre_core::driver();
+            rustre_core::add_source_file(&db, file.clone());
+            print_diagnostics(&db, *deny_warnings)
         }
         Commands::Build { file } => match file {
             Some(_filename) => {

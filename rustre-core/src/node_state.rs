@@ -34,6 +34,7 @@ use std::hash::Hash;
 use std::rc::Rc;
 use yeter::Database;
 
+use crate::diagnostics::{Diagnostic, Level, Span};
 use rustre_parser::ast::{AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode};
 
 use crate::types::Type;
@@ -216,12 +217,24 @@ pub fn check_node_function_state(db: &Database, node: NodeNode) {
     let has_no_state = state_of(db, node.clone()).is_empty();
 
     if node.is_node() && has_no_state {
-        // TODO(diagnostics): replace by actual error reporting
-        eprintln!("WARNING: node has no internal state. hint: replace with `function`");
+        let span = Span::of_token(db, node.node().unwrap().syntax());
+
+        Diagnostic::new(
+            Level::Warning,
+            "node has no internal state, it should be declared as `function`",
+        )
+        .with_attachment(span, "hint: replace with `function`")
+        .emit(db);
     }
 
     if node.is_function() && !has_no_state {
-        // TODO(diagnostics): replace by actual error reporting
-        eprintln!("ERROR: function has internal state. hint: replace with `node`");
+        let span = Span::of_token(db, node.function().unwrap().syntax());
+
+        Diagnostic::new(
+            Level::Error,
+            "function has internal state, it should be a node",
+        )
+        .with_attachment(span, "hint: replace with `node`")
+        .emit(db);
     }
 }

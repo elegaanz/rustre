@@ -10,6 +10,7 @@ pub mod name_resolution;
 pub mod node_state;
 mod types;
 
+use crate::diagnostics::{Diagnostic, Level, Span};
 use rustre_parser::ast::{
     AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
 };
@@ -54,8 +55,19 @@ pub struct TypedSignature {
 #[yeter::query]
 pub fn parse_file(db: &Database, file: SourceFile) -> Root {
     let source = file.text;
-    // TODO: report errors
-    let (root, _errors) = rustre_parser::parse(&source);
+
+    let (root, errors) = rustre_parser::parse(&source);
+    for error in errors {
+        let span = Span {
+            file: file.path.clone(),
+            start: error.span.start,
+            end: error.span.end,
+        };
+
+        Diagnostic::new(Level::Error, "parsing error")
+            .with_attachment(span, error.msg)
+            .emit(db);
+    }
 
     db.set::<diagnostics::file_for_root>((root.syntax().clone(),), Some(file.path));
 
@@ -120,8 +132,29 @@ pub fn get_typed_signature(db: &Database, node: NodeNode) -> TypedSignature {
     }
 }
 
+/// **Query:** Global program check
+#[yeter::query]
+pub fn check(db: &Database) {
+    let files = parsed_files(db);
+    for file in files.as_slice() {
+        for node in file.all_node_node() {
+            let _ = get_typed_signature(db, node.clone());
+
+            if let Some(body) = node.body_node() {
+                for equation in body.all_equals_equation_node() {
+                    if let Some(expression) = equation.expression_node() {
+                        let _ = types::type_check_expression(db, &expression);
+                    }
+                }
+            }
+
+            node_state::check_node_function_state(db, node);
+        }
+    }
+}
+
 /// Adds a source file to the list of files that are known by the compiler
-pub fn add_source_file(db: &mut Database, path: PathBuf) {
+pub fn add_source_file(db: &Database, path: PathBuf) {
     let contents = std::fs::read_to_string(&path).unwrap(); // TODO: report the error
     let file = SourceFile::new(path, contents);
     let files = files(db);
@@ -136,8 +169,8 @@ mod tests {
 
     #[test]
     fn parse_query() {
-        let mut driver = super::driver();
-        super::add_source_file(&mut driver, Path::new("../tests/stable.lus").to_owned());
+        let driver = super::driver();
+        super::add_source_file(&driver, Path::new("../tests/stable.lus").to_owned());
         let files = super::files(&driver);
         let files = files.as_ref().as_deref().unwrap_or_default();
         for file in files {
