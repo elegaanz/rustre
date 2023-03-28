@@ -169,9 +169,7 @@ pub fn add_source_contents(db: &mut Database, contents: String) {
     let files = files(db);
     let mut files = (*files).clone();
     files.push(file);
-    db.register::<_, files>(move |_db, ()| {
-        files.clone() // TODO: find a way to not clone?
-    })
+    db.set::<files>((), Some(files));
 }
 
 #[cfg(test)]

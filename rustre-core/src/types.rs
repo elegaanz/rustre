@@ -30,7 +30,7 @@ pub enum Type {
     Tuple(Vec<Type>),
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum ConstValue {
     Boolean(bool),
     Integer(i32),

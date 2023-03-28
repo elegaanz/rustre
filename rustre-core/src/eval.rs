@@ -25,12 +25,12 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             let ident = node.id_node().unwrap();
             let node = name_resolution::resolve_const_expr_node(db, NameResolveQuery{ident: ident.ident().unwrap(), in_node: in_node.clone()});
             if let Some(ref node) = node.as_ref() {
-                return eval_const_node(db, node.clone(), in_node.clone());
+                return Option::clone(&eval_const_node(db, node.clone(), in_node.clone()));
             }
             return None;
         },
         ExpressionNode::NotExpressionNode(node) => {
-            let value = eval_const_node(db, node.operand()?.clone(), in_node.clone())?;
+            let value = Option::clone(&eval_const_node(db, node.operand()?.clone(), in_node.clone()))?;
             match value {
                 ConstValue::Boolean(value) => {
                     return Some(ConstValue::Boolean(!value));
@@ -39,7 +39,7 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::NegExpressionNode(node) => {
-            let value = eval_const_node(db, node.operand()?.clone(), in_node.clone())?;
+            let value = Option::clone(&eval_const_node(db, node.operand()?.clone(), in_node.clone()))?;
             match value {
                 ConstValue::Integer(value) => {
                     return Some(ConstValue::Integer(-value));
@@ -53,7 +53,7 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
         ExpressionNode::PreExpressionNode(_) => todo!(),
         ExpressionNode::CurrentExpressionNode(_) => todo!(),
         ExpressionNode::IntExpressionNode(node) => {
-            let value = eval_const_node(db, node.operand()?.clone(), in_node.clone())?;
+            let value = Option::clone(&eval_const_node(db, node.operand()?.clone(), in_node.clone()))?;
             match value {
                 ConstValue::Integer(value) => {
                     return Some(ConstValue::Integer(value));
@@ -65,7 +65,7 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::RealExpressionNode(node) => {
-            let value = eval_const_node(db, node.operand()?.clone(), in_node.clone())?;
+            let value = Option::clone(&eval_const_node(db, node.operand()?.clone(), in_node.clone()))?;
             match value {
                 ConstValue::Integer(value) => {
                     return Some(ConstValue::Real(value as f32));
@@ -80,8 +80,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
         ExpressionNode::FbyExpressionNode(_) => todo!(),
         ExpressionNode::ArrowExpressionNode(_) => todo!(),
         ExpressionNode::AndExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone().clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone().clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Boolean(left), ConstValue::Boolean(right)) => {
                     return Some(ConstValue::Boolean(left && right));
@@ -90,8 +90,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::OrExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Boolean(left), ConstValue::Boolean(right)) => {
                     return Some(ConstValue::Boolean(left || right));
@@ -100,8 +100,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::XorExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Boolean(left), ConstValue::Boolean(right)) => {
                     return Some(ConstValue::Boolean(left ^ right));
@@ -110,8 +110,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::ImplExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Boolean(left), ConstValue::Boolean(right)) => {
                     return Some(ConstValue::Boolean(!left || right));
@@ -120,8 +120,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::EqExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Boolean(left), ConstValue::Boolean(right)) => {
                     return Some(ConstValue::Boolean(left == right));
@@ -136,8 +136,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::NeqExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Boolean(left), ConstValue::Boolean(right)) => {
                     return Some(ConstValue::Boolean(left != right));
@@ -152,8 +152,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::LtExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Boolean(left < right));
@@ -171,8 +171,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::LteExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Boolean(left <= right));
@@ -190,8 +190,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::GtExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Boolean(left > right));
@@ -209,8 +209,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::GteExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Boolean(left >= right));
@@ -228,8 +228,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::DivExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Integer(left / right));
@@ -247,8 +247,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::ModExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Integer(left % right));
@@ -266,8 +266,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::SubExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Integer(left - right));
@@ -285,8 +285,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::AddExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Integer(left + right));
@@ -304,8 +304,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::MulExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Integer(left * right));
@@ -323,8 +323,8 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::PowerExpressionNode(node) => {
-            let left = eval_const_node(db, node.left()?.clone(), in_node.clone())?;
-            let right = eval_const_node(db, node.right()?.clone(), in_node.clone())?;
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
             match (left, right) {
                 (ConstValue::Integer(left), ConstValue::Integer(right)) => {
                     return Some(ConstValue::Integer(left.pow(right as u32)));
@@ -342,13 +342,13 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
             }
         },
         ExpressionNode::IfExpressionNode(node) => {
-            let cond = eval_const_node(db, node.cond()?.clone(), in_node.clone())?;
+            let cond = Option::clone(&eval_const_node(db, node.cond()?.clone(), in_node.clone()))?;
             match cond {
                 ConstValue::Boolean(true) => {
-                    return eval_const_node(db, node.if_body()?.clone(), in_node.clone());
+                    return Option::clone(&eval_const_node(db, node.if_body()?.clone(), in_node.clone()));
                 },
                 ConstValue::Boolean(false) => {
-                    return eval_const_node(db, node.else_body()?.clone(), in_node.clone());
+                    return Option::clone(&eval_const_node(db, node.else_body()?.clone(), in_node.clone()));
                 },
                 _ => todo!(),
             }
@@ -374,10 +374,10 @@ mod tests {
     fn one_plus_one() {
         let mut db = crate::driver();
         crate::add_source_contents(&mut db, String::from("const x = 1 + 1;"));
-        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
+        let node = crate::parse_file(&db, files(&db).as_ref().as_ref().unwrap().get(0).unwrap().clone());
         let expr = node.all_constant_decl_node().next().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
-        let value = eval_const_node(&db, expr, None);
-        let value = value.as_ref().as_ref().unwrap();
+        let value = Option::clone(&eval_const_node(&db, expr, None));
+        let value = value.as_ref().unwrap();
         assert_eq!(*value, crate::types::ConstValue::Integer(2));
     }
 
@@ -386,8 +386,8 @@ mod tests {
         let db = crate::driver();
         let node = crate::parse_file(&db, crate::SourceFile { path: PathBuf::new(), text: String::from("const x = not true;") });
         let expr = node.all_constant_decl_node().next().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
-        let value = eval_const_node(&db, expr, None);
-        let value = value.as_ref().as_ref().unwrap();
+        let value = Option::clone(&eval_const_node(&db, expr, None));
+        let value = value.as_ref().unwrap();
         assert_eq!(*value, crate::types::ConstValue::Boolean(false));
     }
 
@@ -396,10 +396,10 @@ mod tests {
         let mut db = crate::driver();
         //let node = crate::parse_file(&db, crate::SourceFile { path: PathBuf::new(), text: String::from("const x = 1; const y = 2 + x;") });
         crate::add_source_contents(&mut db, String::from("const x = 1;\nconst y = 2 + x;\n"));
-        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
+        let node = crate::parse_file(&db, files(&db).as_ref().as_ref().unwrap().get(0).unwrap().clone());
         let expr = node.all_constant_decl_node().last().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
-        let value = eval_const_node(&db, expr, None);
-        let value = value.as_ref().as_ref().unwrap();
+        let value = Option::clone(&eval_const_node(&db, expr, None));
+        let value = value.as_ref().unwrap();
         assert_eq!(*value, crate::types::ConstValue::Integer(3));
     }
 
@@ -407,10 +407,10 @@ mod tests {
     fn if_true() {
         let mut db = crate::driver();
         crate::add_source_contents(&mut db, String::from("const x = true; const y = if x then 1 else 2;"));
-        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
+        let node = crate::parse_file(&db, files(&db).as_ref().as_ref().unwrap().get(0).unwrap().clone());
         let expr = node.all_constant_decl_node().last().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
-        let value = eval_const_node(&db, expr, None);
-        let value = value.as_ref().as_ref().unwrap();
+        let value = Option::clone(&eval_const_node(&db, expr, None));
+        let value = value.as_ref().unwrap();
         assert_eq!(*value, crate::types::ConstValue::Integer(1));
     }
 
@@ -418,10 +418,10 @@ mod tests {
     fn if_false() {
         let mut db = crate::driver();
         crate::add_source_contents(&mut db, String::from("const x = false; const y = if x then 1 else 2;"));
-        let node = crate::parse_file(&db, files(&db).get(0).unwrap().clone());
+        let node = crate::parse_file(&db, files(&db).as_ref().as_ref().unwrap().get(0).unwrap().clone());
         let expr = node.all_constant_decl_node().last().unwrap().all_one_constant_decl_node().next().unwrap().expression_node().unwrap();
-        let value = eval_const_node(&db, expr, None);
-        let value = value.as_ref().as_ref().unwrap();
+        let value = Option::clone(&eval_const_node(&db, expr, None));
+        let value = value.as_ref().unwrap();
         assert_eq!(*value, crate::types::ConstValue::Integer(2));
     }
 }
