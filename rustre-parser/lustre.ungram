@@ -142,7 +142,7 @@ IfExpressionNode = 'if' cond:ExpressionNode 'then' if_body:ExpressionNode 'else'
 WithExpressionNode = 'with' cond:ExpressionNode 'then' with_body:ExpressionNode 'else' else_body:ExpressionNode
 DieseExpressionNode = 'diese' list:ExpressionListNode
 NorExpressionNode = 'nor' list:ExpressionListNode
-CallByPosExpressionNode = node_ref:IdentExpressionNode args:ExpressionNode* // TODO static args
+CallByPosExpressionNode = node_ref:IdentExpressionNode 'open_par' args:ExpressionNode* 'close_par' // TODO static args
 
 // === ConstantRules ===
 

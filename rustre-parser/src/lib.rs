@@ -81,6 +81,10 @@ pub type SyntaxNode = rowan::SyntaxNode<LustreLang>;
 /// [`LustreLang`]
 pub type SyntaxToken = rowan::SyntaxToken<LustreLang>;
 
+/// [rowan's `SyntaxElement`][rowan::SyntaxElement] parameterized with the Lustre language marker,
+/// [`LustreLang`]
+pub type SyntaxElement = rowan::SyntaxElement<LustreLang>;
+
 /// Lex a Lustre file into localized [Token]s
 ///
 /// Shorthand for [`Lexer::from_source`].

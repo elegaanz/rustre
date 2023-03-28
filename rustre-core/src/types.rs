@@ -1,5 +1,6 @@
 use yeter::Database;
-use rustre_parser::ast::{AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode, TypeNode};
+use rustre_parser::ast::{AstNode, AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode, TypeNode};
+use crate::diagnostics::{Diagnostic, Level, Span};
 use crate::TypedSignature;
 
 #[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
@@ -49,10 +50,36 @@ impl Type {
     }
 }
 
+// This is not great for complex types. For instance, type aliases should remain as-is instead of
+// being displayed as their resolved version. We should change that later.
+impl std::fmt::Display for Type {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Type::Unknown => write!(f, "{{unknown}}"),
+            Type::Boolean => write!(f, "bool"),
+            Type::Integer => write!(f, "int"),
+            Type::Real => write!(f, "real"),
+            Type::Function { .. } => write!(f, "{{function}}"),
+            Type::Array { elem, size } => write!(f, "{elem}^{size}"),
+            Type::Tuple(types) => {
+                write!(f, "(")?;
+                for (idx, ty) in types.iter().enumerate() {
+                    if idx == 0 {
+                        write!(f, "{ty}")
+                    } else {
+                        write!(f, ", {ty}")
+                    }?;
+                }
+                write!(f, ")")
+            },
+        }
+    }
+}
+
 /// **Query**: Type-checks a given node
 #[yeter::query]
 pub fn type_check_query(db: &yeter::Database, node_name: String) -> Result<Type, ()> {
-    let _node = crate::find_node(db, node_name);
+    let _node = crate::name_resolution::find_node(db, node_name);
     //for equals_equation in node.unwrap().body_node().unwrap().all_equals_equation_node() {
         //TODO Left node
 
@@ -74,9 +101,16 @@ pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNo
         let decl = crate::name_resolution::resolve_type_decl(db, id.clone());
 
         match decl.as_ref() {
-            Some(decl) => decl.type_node().map(|t| type_of_ast_type(db, node, t)).unwrap_or_default(),
+            Some(decl) => Type::clone(&decl.type_node().map(|t| type_of_ast_type(db, node, t)).unwrap_or_default()),
             None => {
-                eprintln!("cannot resolve type {:?}", id.ident().unwrap().text()); // TODO(diagnostics)
+                let span = Span::of_node(db, id.syntax());
+                let ident = id.ident().unwrap();
+                let name = ident.text();
+
+                Diagnostic::new(Level::Error, format!("cannot resolve type {name:?}"))
+                    .with_attachment(span, "not found in this scope")
+                    .emit(db);
+
                 Type::Unknown
             },
         }
@@ -93,8 +127,16 @@ pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNo
 
 pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Result<Type, ()> {
     match expr {
-        ExpressionNode::ConstantNode(_node) => {
-            todo!()
+        ExpressionNode::ConstantNode(constant) => {
+            return if constant.is_true() || constant.is_false() {
+                Ok(Type::Boolean)
+            } else if constant.i_const().is_some() {
+                Ok(Type::Integer)
+            } else if constant.r_const().is_some() {
+                Ok(Type::Real)
+            } else {
+                Ok(Type::Unknown)
+            }
         },
         ExpressionNode::NotExpressionNode(node) => {
             let _exp = type_check_expression(db, &node.operand().unwrap());
@@ -378,11 +420,17 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode) -> Res
                 .and_then(|i| i.ident());
 
             if let Some(name) = name {
-                let node_node = crate::find_node(db, name.text().into());
+                let node_node = crate::name_resolution::find_node(db, name.text().into());
 
                 if let Some(node_node) = Option::clone(&node_node) {
                     let sig = crate::get_typed_signature(db, node_node);
                     return Ok(check_call_expression(db, expr, &sig));
+                } else {
+                    let span = Span::of_token(db, name.syntax());
+
+                    Diagnostic::new(Level::Error, format!("unknown node {:?}", name.text()))
+                        .with_attachment(span, "not found in this scope")
+                        .emit(db);
                 }
             }
 
@@ -407,15 +455,42 @@ fn check_call_expression(
                 if !expected_ty.is_unknown() {
                     let found_ty = type_check_expression(db, &found).unwrap_or_default();
                     if !found_ty.is_unknown() && expected_ty != &found_ty {
-                        eprintln!("invalid type {found_ty:?}, expected {expected_ty:?}");
+                        let span = Span::of_node(db, found.syntax());
+                        Diagnostic::new(Level::Error, "invalid type for argument")
+                            .with_attachment(span, format!("expected {expected_ty}, found {found_ty}"))
+                            .emit(db);
                     }
                 }
             }
-            (Some(_expected), None) => {
-                eprintln!("missing argument");
+            (Some((expected_ident, _expected_type)), None) => {
+                let error_span = expr.args()
+                    .last()
+                    .map(|s| Span::of_node(db, s.syntax()))
+                    .or_else(|| expr.open_par().map(|p| Span::of_token(db, p.syntax())))
+                    .or_else(|| expr.node_ref().map(|i| Span::of_node(db, i.syntax())))
+                    .unwrap_or_else(|| Span::of_node(db, expr.syntax()))
+                    .after();
+
+                let name_span = Span::of_node(db,  expr.node_ref().unwrap().syntax());
+                let found_count = expr.args().skip(1).count();
+                let expected_count = sig.params.len();
+                let expected_ident = expected_ident.text();
+
+                Diagnostic::new(Level::Error, format!("missing argument {expected_ident:?}"))
+                    .with_attachment(name_span, format!("this function expects {expected_count} arguments but {found_count} were supplied"))
+                    .with_attachment(error_span, "hint: add the missing arguments(s)")
+                    .emit(db);
             }
             (None, Some(found)) => {
-                eprintln!("unexpected argument {found:?}") // TODO(diagnostics)
+                let arg_span = Span::of_node(db, found.syntax());
+                let name_span = Span::of_node(db,  expr.node_ref().unwrap().syntax());
+                let found_count = expr.args().skip(1).count();
+                let expected_count = sig.params.len();
+
+                Diagnostic::new(Level::Error, "unexpected argument")
+                    .with_attachment(arg_span, "hint: remove this argument")
+                    .with_attachment(name_span, format!("this function expects {expected_count} arguments but {found_count} were supplied"))
+                    .emit(db);
             }
         }
     }

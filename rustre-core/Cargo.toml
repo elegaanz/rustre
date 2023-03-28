@@ -9,4 +9,4 @@ edition = "2021"
 bimap = "0.6.2"
 petgraph = "0.6.2"
 rustre-parser = { path = "../rustre-parser" }
-yeter = "0.4.0"
+yeter = "0.6"

@@ -16,6 +16,19 @@ pub fn resolve_type_decl(db: &Database, name: IdNode) -> Option<OneTypeDeclNode>
         .find(|decl| matches!(decl.ident(), Some(n) if n.text() == name))
 }
 
+#[yeter::query]
+pub fn find_node(db: &Database, node_name: String) -> Option<NodeNode> {
+    for file in super::parsed_files(db).as_slice() {
+        for node in file.all_node_node() {
+            if node.id_node()?.ident()?.text() == node_name {
+                return Some(node.clone());
+            }
+        }
+    }
+
+    None
+}
+
 // TODO handle packages correctly
 #[derive(Clone, Debug, Hash)]
 pub struct NameResolveQuery {
