@@ -86,18 +86,58 @@ impl std::fmt::Display for Type {
 
 /// **Query**: Type-checks a given node
 #[yeter::query]
-pub fn type_check_query<'a>(db: &yeter::Database, node_name: String, in_node: &'a Option<NodeNode>) -> Result<Type, ()> {
-    let body_node = crate::name_resolution::find_node(db, node_name);
-    let body_node = body_node.as_ref().as_ref().unwrap().body_node();
-    // Check all equations
-    for node in body_node.unwrap().all_equals_equation_node() {
-        let lefts = node.left_node().unwrap().left_item_list_node().unwrap().all_left_item_node();
-        let rights = node.expression_node();
-        let lefts: Vec<_> = lefts.collect();
-        let rights = node.expression_node().unwrap();
+pub fn type_check_query(db: &yeter::Database, node_name: String) -> Result<Type, &'static str> {
+    let node_node = crate::name_resolution::find_node(db, node_name);
+    let body_node = node_node.as_ref().as_ref().unwrap().body_node();
+
+    for node in body_node.as_ref().unwrap().all_equals_equation_node() {
+        let lefts = node.left_node().unwrap().all_left_item_node();
+        let mut left_types = Vec::new();
+        for left in lefts {
+            let left_type = type_check_left(db, &left, &node_node);
+            left_types.push(left_type.unwrap());
+        }
+        let left_types = if left_types.len() == 1 {
+            left_types[0].clone()
+        } else {
+            Type::Tuple(left_types)
+        };
+
+        let right_types = type_check_expression(db,  &node.expression_node().unwrap(), &node_node);
+
+        if Ok(left_types) != right_types {
+            return Err("left and right types do not match");
+        }
     }
-    // Check all assertions
-    todo!()
+    
+    for node in body_node.as_ref().unwrap().all_assert_equation_node() {
+        let right_types = type_check_expression(db,  &node.expression_node().unwrap(), &node_node);
+
+        if right_types != Ok(Type::Boolean) {
+            return Err("assertion must be a boolean expression");
+        }
+    }
+    
+    let node_profile_node = node_node.as_ref().as_ref().unwrap().node_profile_node();
+    let mut args = Vec::new();
+    let mut ret = Vec::new();
+
+    let params = node_profile_node.as_ref().as_ref().unwrap().params().unwrap().all_var_decl_node();
+    for param in params {
+        let typed_id_nodes = param.all_typed_ids_node();
+        for type_nodes in typed_id_nodes {
+            args.push(parse_type(type_nodes.type_node().unwrap()));
+        }
+    }
+
+    let return_params = node_profile_node.as_ref().as_ref().unwrap().return_params().unwrap().all_var_decl_node();
+    for return_param in return_params {
+        let typed_id_nodes = return_param.all_typed_ids_node();
+        for type_nodes in typed_id_nodes {
+            ret.push(parse_type(type_nodes.type_node().unwrap()));
+        }
+    }
+    Ok(Type::Function {args, ret})
 }
 
 #[yeter::query]
@@ -548,4 +588,18 @@ fn parse_type(node: TypeNode) -> Type {
     } else {
         todo!("Arrays, functions and structures are not supported yet.")
     }
+}
+
+#[test]
+fn node_type_check() {
+    let mut db = crate::driver();
+    crate::add_source_contents(&mut db, String::from("node add() returns (); let tel;
+                                                            node sub() returns (); let tel;
+                                                            node id(x: int) returns (y: int); let y=x tel;
+    "));
+
+    assert_eq!(type_check_query(&db, String::from("add")).as_ref().as_ref().unwrap(), &Type::Function { args:vec![], ret: vec![]});
+    assert_eq!(type_check_query(&db, String::from("sub")).as_ref().as_ref().unwrap(), &Type::Function { args:vec![], ret: vec![]});
+    assert_eq!(type_check_query(&db, String::from("id")).as_ref().as_ref().unwrap(), &Type::Function { args:vec![Type::Integer], ret: vec![Type::Integer]});
+
 }

@@ -96,7 +96,7 @@ pub fn resolve_runtime_node(
         let local = params
             .chain(return_params)
             .chain(local_vars)
-            .find(|(ids, _)| ids.all_ident().any(|i| i == *ident));
+            .find(|(ids, _)| ids.all_ident().any(|i| i.text() == ident.text()));
 
         if let Some((local, constructor)) = local {
             return Some(constructor(local));

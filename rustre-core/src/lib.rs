@@ -94,6 +94,7 @@ fn parsed_files(db: &Database) -> Vec<Rc<Root>> {
 
 #[yeter::query]
 pub fn get_signature(_db: &Database, node: NodeNode) -> Signature {
+    println!("coucou c la signgature:!!!!!\n\n\n");
     let sig = node.node_profile_node();
 
     let get_params = |f: fn(&NodeProfileNode) -> Option<ParamsNode>| {
