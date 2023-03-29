@@ -32,8 +32,8 @@ pub fn find_node(db: &Database, node_name: String) -> Option<NodeNode> {
 // TODO handle packages correctly
 #[derive(Clone, Debug, Hash)]
 pub struct NameResolveQuery {
-    ident: IdNode,
-    in_node: Option<NodeNode>,
+    pub ident: Ident,
+    pub in_node: Option<NodeNode>,
 }
 
 pub enum ResolvedRuntimeNode<Var, Input = Var> {
@@ -61,7 +61,7 @@ pub fn resolve_const_node(db: &Database, query: NameResolveQuery) -> Option<OneC
 
     local_scope
         .chain(global_scope)
-        .find(|one_const| one_const.all_id_node().any(|i| i == query.ident))
+        .find(|one_const| one_const.all_id_node().any(|i| i.ident().unwrap().text() == query.ident.text()))
 }
 
 /// **Query**
@@ -79,7 +79,7 @@ pub fn resolve_runtime_node(
     db: &Database,
     query: NameResolveQuery,
 ) -> Option<ResolvedRuntimeNode<TypedIdsNode>> {
-    if let (Some(ident), Some(in_node)) = (query.ident.ident(), &query.in_node) {
+    if let (ident, Some(in_node)) = (&query.ident, &query.in_node) {
         let sig = super::get_signature(db, in_node.clone());
 
         let params_c = std::iter::repeat(ResolvedRuntimeNode::Param as fn(_) -> _);
@@ -99,7 +99,7 @@ pub fn resolve_runtime_node(
         let local = params
             .chain(return_params)
             .chain(local_vars)
-            .find(|(ids, _)| ids.all_ident().any(|i| i == ident));
+            .find(|(ids, _)| ids.all_ident().any(|i| i == *ident));
 
         if let Some((local, constructor)) = local {
             return Some(constructor(local));

@@ -30,6 +30,13 @@ pub enum Type {
     Tuple(Vec<Type>),
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub enum ConstValue {
+    Boolean(bool),
+    Integer(i32),
+    Real(f32)
+}
+
 impl Type {
     pub fn is_function(&self) -> bool {
         match self {

@@ -8,6 +8,7 @@ pub mod diagnostics;
 pub mod expression;
 pub mod name_resolution;
 pub mod node_state;
+pub mod eval;
 mod types;
 
 use crate::diagnostics::{Diagnostic, Level, Span};
@@ -158,7 +159,15 @@ pub fn add_source_file(db: &Database, path: PathBuf) {
     let contents = std::fs::read_to_string(&path).unwrap(); // TODO: report the error
     let file = SourceFile::new(path, contents);
     let files = files(db);
-    let mut files = (*files).clone().unwrap_or_default();
+    let mut files = Option::clone(&files).unwrap_or_default();
+    files.push(file);
+    db.set::<files>((), Some(files));
+}
+
+pub fn add_source_contents(db: &mut Database, contents: String) {
+    let file = SourceFile::new(PathBuf::new(), contents);
+    let files = files(db);
+    let mut files = Option::clone(&files).unwrap_or_default();
     files.push(file);
     db.set::<files>((), Some(files));
 }

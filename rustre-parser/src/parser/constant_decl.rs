@@ -19,11 +19,11 @@ pub fn parse_one_const_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult
     node(
         OneConstantDeclNode,
         join((
-            ident::parse_lv6_id,
+            ident::parse_id_any,
             many0(join((
                 t(Comma),
                 expect(
-                    ident::parse_lv6_id,
+                    ident::parse_id_any,
                     "expected other constant name after `,`",
                 ),
             ))),
