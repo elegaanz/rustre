@@ -167,7 +167,7 @@ pub fn add_source_file(db: &Database, path: PathBuf) {
 pub fn add_source_contents(db: &mut Database, contents: String) {
     let file = SourceFile::new(PathBuf::new(), contents);
     let files = files(db);
-    let mut files = (*files).clone();
+    let mut files = Option::clone(&files).unwrap_or_default();
     files.push(file);
     db.set::<files>((), Some(files));
 }
