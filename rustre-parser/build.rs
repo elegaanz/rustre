@@ -385,14 +385,14 @@ impl Generator {
                         // unwrap
                         writeln!(
                             self.out,
-                            "    pub fn unwrap_{}(self) -> {} {{",
+                            "    pub fn unwrap_{}(&self) -> {} {{",
                             lower_name,
                             name.clone()
                         )
                         .ok();
                         writeln!(
                             self.out,
-                            "        if let {}::{}(data) = self {{ data }} else {{ panic!(\"Failed to unwrap {} as {}\") }}",
+                            "        if let {}::{}(data) = self {{ data.clone() }} else {{ panic!(\"Failed to unwrap {} as {}\") }}",
                             kind,
                             name,
                             kind,

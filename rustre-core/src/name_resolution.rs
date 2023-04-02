@@ -9,11 +9,8 @@ pub fn resolve_type_decl(db: &Database, name: IdNode) -> Option<OneTypeDeclNode>
 
     let files = super::parsed_files(db);
 
-    files
-        .iter()
-        .flat_map(|root| root.all_type_decl_node())
-        .flat_map(|decl| decl.all_one_type_decl_node())
-        .find(|decl| matches!(decl.ident(), Some(n) if n.text() == name))
+    // Overwrite this when rebasing onto main
+    todo!()
 }
 
 #[yeter::query]
@@ -99,7 +96,7 @@ pub fn resolve_runtime_node(
         let local = params
             .chain(return_params)
             .chain(local_vars)
-            .find(|(ids, _)| ids.all_ident().any(|i| i == *ident));
+            .find(|(ids, _)| ids.all_ident().any(|i| i.text() == ident.text()));
 
         if let Some((local, constructor)) = local {
             return Some(constructor(local));

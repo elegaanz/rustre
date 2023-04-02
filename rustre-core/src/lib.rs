@@ -2,8 +2,6 @@
 //!
 //! It is built around [yeter].
 
-use std::path::PathBuf;
-
 pub mod diagnostics;
 pub mod expression;
 pub mod name_resolution;
@@ -11,12 +9,15 @@ pub mod node_state;
 pub mod eval;
 mod types;
 
-use crate::diagnostics::{Diagnostic, Level, Span};
+use std::path::PathBuf;
+use crate::{diagnostics::{Diagnostic, Level, Span}, types::type_check_query};
+
 use rustre_parser::ast::{
     AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
 };
 use std::rc::Rc;
 use yeter::Database;
+
 
 /// Builds a new compiler driver, that corresponds to a compilation session
 pub fn driver() -> Database {
@@ -141,13 +142,7 @@ pub fn check(db: &Database) {
         for node in file.all_node_node() {
             let _ = get_typed_signature(db, node.clone());
 
-            if let Some(body) = node.body_node() {
-                for equation in body.all_equals_equation_node() {
-                    if let Some(expression) = equation.expression_node() {
-                        let _ = types::type_check_expression(db, &expression);
-                    }
-                }
-            }
+            let _ = type_check_query(db, node.clone());
 
             node_state::check_node_function_state(db, node);
         }

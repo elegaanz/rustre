@@ -91,6 +91,7 @@ fn extract_state(
     expr: ExpressionNode,
     stack: &mut impl Extend<ExpressionNode>,
     builder: &mut NodeState,
+    in_node: &Option<NodeNode>,
 ) {
     match &expr {
         ExpressionNode::PreExpressionNode(e) => {
@@ -98,12 +99,10 @@ fn extract_state(
                 return;
             };
 
-            let ty = crate::types::type_check_expression(db, &operand).ok();
+            let ty = crate::types::type_check_expression(db, &operand, in_node);
             stack.extend([operand]);
 
-            if let Some(ty) = ty {
-                builder.push_operator(expr, ty);
-            }
+            builder.push_operator(expr, ty);
         }
         ExpressionNode::FbyExpressionNode(e) => {
             stack.extend(e.left());
@@ -113,11 +112,9 @@ fn extract_state(
                 return;
             };
 
-            let ty = crate::types::type_check_expression(db, &left).ok();
+            let ty = crate::types::type_check_expression(db, &left, in_node);
 
-            if let Some(ty) = ty {
-                builder.push_operator(expr, ty);
-            }
+            builder.push_operator(expr, ty);
         }
         ExpressionNode::ArrowExpressionNode(e) => {
             stack.extend(e.left());
@@ -204,7 +201,7 @@ pub fn state_of(db: &Database, node: NodeNode) -> NodeState {
     // Recurse on a tree of expressions and collect any signs of state
     let mut stack = all_expressions.collect::<Vec<_>>();
     while let Some(expr) = stack.pop() {
-        extract_state(db, expr, &mut stack, &mut state);
+        extract_state(db, expr, &mut stack, &mut state, &Some(node.clone()));
     }
 
     state
