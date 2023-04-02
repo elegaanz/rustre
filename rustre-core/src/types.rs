@@ -98,7 +98,7 @@ pub fn type_check_query(db: &yeter::Database, node_name: String) -> Result<Type,
             left_types.push(left_type.unwrap());
         }
         let left_types = if left_types.len() == 1 {
-            left_types[0].clone()
+            left_types.pop().unwrap()
         } else {
             Type::Tuple(left_types)
         };
@@ -595,7 +595,7 @@ fn node_type_check() {
     let mut db = crate::driver();
     crate::add_source_contents(&mut db, String::from("node add() returns (); let tel;
                                                             node sub() returns (); let tel;
-                                                            node id(x: int) returns (y: int); let y=x tel;
+                                                            node id(x: int) returns (y: int); let y=x; tel;
     "));
 
     assert_eq!(type_check_query(&db, String::from("add")).as_ref().as_ref().unwrap(), &Type::Function { args:vec![], ret: vec![]});
