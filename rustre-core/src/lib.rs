@@ -2,6 +2,7 @@
 //!
 //! It is built around [yeter].
 
+pub mod checks;
 pub mod diagnostics;
 pub mod expression;
 pub mod name_resolution;
@@ -141,6 +142,8 @@ pub fn check(db: &Database) {
     for file in files.as_slice() {
         for node in file.all_node_node() {
             let _ = get_typed_signature(db, node.clone());
+
+            checks::check_arity(db, node.clone());
 
             let _ = type_check_query(db, node.clone());
 
