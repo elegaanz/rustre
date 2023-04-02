@@ -141,10 +141,10 @@ pub fn check(db: &Database) {
         for node in file.all_node_node() {
             let _ = get_typed_signature(db, node.clone());
 
-            if let Some(body) = node.body_node() {
+            if let Some(body) = node.clone().body_node() {
                 for equation in body.all_equals_equation_node() {
                     if let Some(expression) = equation.expression_node() {
-                        let _ = types::type_check_expression(db, &expression);
+                        let _ = types::type_check_expression(db, &expression, &Some(node.clone()));
                     }
                 }
             }
