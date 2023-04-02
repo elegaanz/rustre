@@ -1,5 +1,5 @@
 use yeter::Database;
-use rustre_parser::ast::{AstNode, AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode, TypeNode};
+use rustre_parser::ast::{AstNode, AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode, TypeNode, LeftItemNode};
 use crate::diagnostics::{Diagnostic, Level, Span};
 use crate::TypedSignature;
 use crate::name_resolution::{ResolvedRuntimeNode, resolve_runtime_node, NameResolveQuery}; 
@@ -519,6 +519,14 @@ fn check_call_expression(
     } else {
         let cloned = sig.return_params.iter().map(|(_, t)| t).cloned().collect();
         Type::Tuple(cloned)
+    }
+}
+
+fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<NodeNode>) -> Result<Type, ()> {
+    match expr {
+        IdNode => todo!(),
+        LeftTableItemNode => todo!(),
+        LeftFieldItemNode => todo!(),
     }
 }
 

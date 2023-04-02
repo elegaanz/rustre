@@ -69,8 +69,13 @@ AssertEquationNode = 'assert' ExpressionNode
 
 // === LeftRules ===
 
-LeftNode = LeftItemNode* 'equal'?
-LeftItemNode = IdNode? // TODO
+LeftNode = 'open_par'? LeftItemListNode 'close_par'?
+LeftItemListNode = LeftItemNode* 'comma'*
+LeftItemNode = IdNode | LeftFieldAccessNode | LeftTableAccessNode
+LeftFieldAccessNode = LeftItemNode 'dot' IdNode 
+LeftTableAccessNode = LeftItemNode 'open_bracket' ExpressionNode? SelectNode? 'close_bracket'
+SelectNode = left:ExpressionNode 'c_dots' right:ExpressionNode StepNode
+StepNode = 'step' ExpressionNode
 
 // === ExpressionRules ===
 

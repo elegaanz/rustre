@@ -3,6 +3,12 @@
 //! It is built around [yeter].
 
 use std::path::PathBuf;
+use crate::diagnostics::{Diagnostic, Level, Span};
+use rustre_parser::ast::{
+    AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
+};
+use std::rc::Rc;
+use yeter::Database;
 
 pub mod diagnostics;
 pub mod expression;
@@ -10,13 +16,6 @@ pub mod name_resolution;
 pub mod node_state;
 pub mod eval;
 mod types;
-
-use crate::diagnostics::{Diagnostic, Level, Span};
-use rustre_parser::ast::{
-    AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
-};
-use std::rc::Rc;
-use yeter::Database;
 
 /// Builds a new compiler driver, that corresponds to a compilation session
 pub fn driver() -> Database {
