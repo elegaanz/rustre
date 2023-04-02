@@ -9,8 +9,11 @@ pub fn resolve_type_decl(db: &Database, name: IdNode) -> Option<OneTypeDeclNode>
 
     let files = super::parsed_files(db);
 
-    // Overwrite this when rebasing onto main
-    todo!()
+    files
+        .iter()
+        .flat_map(|root| root.all_type_decl_node())
+        .flat_map(|decl| decl.all_one_type_decl_node())
+        .find(|decl| matches!(decl.ident(), Some(n) if n.text() == name))
 }
 
 #[yeter::query]
