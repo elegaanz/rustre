@@ -99,12 +99,10 @@ fn extract_state(
                 return;
             };
 
-            let ty = crate::types::type_check_expression(db, &operand, in_node).ok();
+            let ty = crate::types::type_check_expression(db, &operand, in_node);
             stack.extend([operand]);
 
-            if let Some(ty) = ty {
-                builder.push_operator(expr, ty);
-            }
+            builder.push_operator(expr, ty);
         }
         ExpressionNode::FbyExpressionNode(e) => {
             stack.extend(e.left());
@@ -114,11 +112,9 @@ fn extract_state(
                 return;
             };
 
-            let ty = crate::types::type_check_expression(db, &left, in_node).ok();
+            let ty = crate::types::type_check_expression(db, &left, in_node);
 
-            if let Some(ty) = ty {
-                builder.push_operator(expr, ty);
-            }
+            builder.push_operator(expr, ty);
         }
         ExpressionNode::ArrowExpressionNode(e) => {
             stack.extend(e.left());
