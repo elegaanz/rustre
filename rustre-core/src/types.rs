@@ -86,14 +86,21 @@ impl std::fmt::Display for Type {
 
 /// **Query**: Type-checks a given node
 #[yeter::query]
-pub fn type_check_query(db: &yeter::Database, node_name: String) -> Result<Type, ()> {
-    let _node = crate::name_resolution::find_node(db, node_name);
-    //for equals_equation in node.unwrap().body_node().unwrap().all_equals_equation_node() {
-        //TODO Left node
-
-    //}
-    
-
+pub fn type_check_query<'a>(db: &yeter::Database, node_name: String, in_node: &'a Option<NodeNode>) -> Result<Type, ()> {
+    let body_node = crate::name_resolution::find_node(db, node_name);
+    let body_node = body_node.as_ref().as_ref().unwrap().body_node();
+    // for node in body_node.as_ref().unwrap().all_equals_equation_node() {
+    //     let left_type = type_check_left(db, &node.left_node().unwrap(), in_node);
+    //     let expr_type = node.expression_node().unwrap();
+    //     if left_type == expr_type {
+    //         return
+    //     } else {
+    //         todo!()
+    //     }
+    // }
+    // for node in body_node.unwrap().all_assert_equation_node() {
+    //     todo!()
+    // }
     todo!()
 }
 
@@ -147,7 +154,7 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             }
         },
         ExpressionNode::NotExpressionNode(node) => {
-            let _exp = type_check_expression(db, &node.operand().unwrap(), in_node);
+            return type_check_expression(db, &node.operand().unwrap(), in_node);
         },
         ExpressionNode::NegExpressionNode(node) => {
             let type_exp = type_check_expression(db, &node.operand().unwrap(), in_node);
@@ -454,7 +461,6 @@ pub fn type_check_expression(db: &yeter::Database, expr: &ExpressionNode, in_nod
             return Ok(Type::Unknown);
         }
     }
-    todo!()
 }
 
 fn check_call_expression(
@@ -524,9 +530,23 @@ fn check_call_expression(
 
 fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<NodeNode>) -> Result<Type, ()> {
     match expr {
-        IdNode => todo!(),
-        LeftTableItemNode => todo!(),
-        LeftFieldItemNode => todo!(),
+        LeftItemNode::IdNode(ident) => {
+            let query = NameResolveQuery {ident: ident.ident().unwrap().clone(), in_node: in_node.clone()};
+            let resolved_node = resolve_runtime_node(db, query);
+            match *resolved_node {
+                Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => return Ok(parse_type(const_decl_node.type_node().unwrap())),
+                Some(ResolvedRuntimeNode::Param(ref var_decl_node)) |
+                Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node)) |
+                Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => return Ok(parse_type(var_decl_node.type_node().unwrap())),
+                None => todo!(),
+            }
+        },
+        LeftItemNode::LeftTableAccessNode(table_item) => {
+            return type_check_left(db, &table_item.left_item_node().unwrap(), in_node);
+        },
+        LeftItemNode::LeftFieldAccessNode(_) => {
+            todo!("Structures are not supported yet.")
+        },
     }
 }
 
