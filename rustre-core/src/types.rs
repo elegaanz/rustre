@@ -225,6 +225,25 @@ macro_rules! some_or_unknown {
     };
 }
 
+/// Resolves the declared type of an ident using a [NameResolveQuery] from [crate::name_resolution]
+#[yeter::query]
+pub fn declared_type_of_ident(db: &Database, query: NameResolveQuery) -> Option<Type> {
+    let in_node = query.in_node.clone();
+    let resolved_node = crate::name_resolution::resolve_runtime_node(db, query);
+    let resolved_node = resolved_node.as_ref().as_ref()?;
+
+    Some(match resolved_node {
+        ResolvedRuntimeNode::Const(const_decl_node) => {
+            type_of_ast_type(db, in_node, const_decl_node.type_node()?).as_ref().clone()
+        }
+        ResolvedRuntimeNode::Param(var_decl_node)
+        | ResolvedRuntimeNode::ReturnParam(var_decl_node)
+        | ResolvedRuntimeNode::Var(var_decl_node) => {
+            type_of_ast_type(db, in_node, var_decl_node.type_node()?).as_ref().clone()
+        }
+    })
+}
+
 macro_rules! ty_check_expr {
     (unary, $db:expr, $node:expr, $in_node:expr, $message:expr, $accept:pat) => {{
         let operand = some_or_unknown!($node.operand());
@@ -597,20 +616,23 @@ pub fn type_check_expression(
         ExpressionNode::IdentExpressionNode(node) => {
             let ident = some_or_unknown!(some_or_unknown!(node.id_node()).ident());
             let query = NameResolveQuery {
-                ident,
+                ident: ident.clone(),
                 in_node: in_node.clone(),
             };
-            let resolved_node = resolve_runtime_node(db, query);
-            match *resolved_node {
-                Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => {
-                    type_of_ast_type(db, in_node.clone(), some_or_unknown!(const_decl_node.type_node())).as_ref().clone()
+
+            let resolved = declared_type_of_ident(db, query);
+            match resolved.as_ref().as_ref() {
+                Some(ty) => ty.clone(),
+                None => {
+                    let name = ident.text();
+                    let span = Span::of_token(db, ident.syntax());
+
+                    Diagnostic::new(Level::Error, format!("cannot find value {name:?}"))
+                        .with_attachment(span, "not found in this scope")
+                        .emit(db);
+
+                    Type::Unknown
                 }
-                Some(ResolvedRuntimeNode::Param(ref var_decl_node))
-                | Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node))
-                | Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => {
-                    type_of_ast_type(db, in_node.clone(), some_or_unknown!(var_decl_node.type_node())).as_ref().clone()
-                }
-                None => Type::Unknown,
             }
         }
         ExpressionNode::ParExpressionNode(node) => {
