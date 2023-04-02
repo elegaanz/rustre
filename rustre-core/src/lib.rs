@@ -1,5 +1,3 @@
-#![feature(try_trait_v2)]
-
 //! Rustre compiler driver
 //!
 //! It is built around [yeter].

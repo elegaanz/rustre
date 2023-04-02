@@ -1,6 +1,3 @@
-use std::convert::Infallible;
-use std::ops::FromResidual;
-
 use crate::diagnostics::{Diagnostic, Level, Span};
 use crate::eval::eval_const_node;
 use crate::name_resolution::{resolve_runtime_node, NameResolveQuery, ResolvedRuntimeNode};
@@ -87,12 +84,6 @@ impl std::fmt::Display for Type {
                 write!(f, ")")
             }
         }
-    }
-}
-
-impl FromResidual<Option<Infallible>> for Type {
-    fn from_residual(_: Option<Infallible>) -> Self {
-        Type::Unknown
     }
 }
 
@@ -225,9 +216,18 @@ pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNo
     }
 }
 
+macro_rules! some_or_unknown {
+    ($option:expr) => {
+        match $option {
+            Some(x) => x,
+            _ => return Type::Unknown,
+        }
+    };
+}
+
 macro_rules! ty_check_expr {
     (unary, $db:expr, $node:expr, $in_node:expr, $message:expr, $accept:pat) => {{
-        let operand = $node.operand()?;
+        let operand = some_or_unknown!($node.operand());
         let type_exp = type_check_expression($db, &operand, $in_node);
         match type_exp {
             $accept => type_exp,
@@ -243,18 +243,18 @@ macro_rules! ty_check_expr {
         }
     }};
     (binary, $db:expr, $node:expr, $in_node:expr) => {{
-        let left_node_type = type_check_expression($db, &$node.left()?, $in_node);
-        let right_node_type = type_check_expression($db, &$node.right()?, $in_node);
+        let left_node_type = type_check_expression($db, &some_or_unknown!($node.left()), $in_node);
+        let right_node_type = type_check_expression($db, &some_or_unknown!($node.right()), $in_node);
         if left_node_type == right_node_type {
             left_node_type
         } else {
             Diagnostic::new(Level::Error, "incompatible types")
                 .with_attachment(
-                    Span::of_node($db, $node.left()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.left()).syntax()),
                     format!("this is of type {}", left_node_type),
                 )
                 .with_attachment(
-                    Span::of_node($db, $node.right()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.right()).syntax()),
                     format!("while this is of type {}", right_node_type),
                 )
                 .emit($db);
@@ -262,8 +262,8 @@ macro_rules! ty_check_expr {
         }
     }};
     (binary, $db:expr, $node:expr, $in_node:expr, $expect:expr) => {{
-        let left_node_type = type_check_expression($db, &$node.left()?, $in_node);
-        let right_node_type = type_check_expression($db, &$node.right()?, $in_node);
+        let left_node_type = type_check_expression($db, &some_or_unknown!($node.left()), $in_node);
+        let right_node_type = type_check_expression($db, &some_or_unknown!($node.right()), $in_node);
 
         if left_node_type != $expect {
             Diagnostic::new(Level::Error, "incorrect type")
@@ -286,13 +286,13 @@ macro_rules! ty_check_expr {
         $expect
     }};
     (comparator, $db:expr, $node:expr, $in_node:expr) => {{
-        let left_node_type = type_check_expression($db, &$node.left()?, $in_node);
-        let right_node_type = type_check_expression($db, &$node.right()?, $in_node);
+        let left_node_type = type_check_expression($db, &some_or_unknown!($node.left()), $in_node);
+        let right_node_type = type_check_expression($db, &some_or_unknown!($node.right()), $in_node);
 
         if left_node_type != Type::Integer && left_node_type != Type::Real {
             Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
-                    Span::of_node($db, $node.left()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.left()).syntax()),
                     format!("expected int or real, found {}", left_node_type),
                 )
                 .emit($db);
@@ -301,7 +301,7 @@ macro_rules! ty_check_expr {
         if right_node_type != Type::Integer && right_node_type != Type::Real {
             Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
-                    Span::of_node($db, $node.right()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.right()).syntax()),
                     format!("expected int or real, found {}", right_node_type),
                 )
                 .emit($db);
@@ -310,7 +310,7 @@ macro_rules! ty_check_expr {
         if left_node_type != right_node_type {
             Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
-                    Span::of_node($db, $node.right()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.right()).syntax()),
                     format!(
                         "expected {} (because of the left operand), found {} (you can use the `{}` function if you want to do a conversion)",
                         left_node_type, right_node_type, left_node_type,
@@ -322,13 +322,13 @@ macro_rules! ty_check_expr {
         Type::Boolean
     }};
     (binary_number, $db:expr, $node:expr, $in_node:expr) => {{
-        let left_node_type = type_check_expression($db, &$node.left()?, $in_node);
-        let right_node_type = type_check_expression($db, &$node.right()?, $in_node);
+        let left_node_type = type_check_expression($db, &some_or_unknown!($node.left()), $in_node);
+        let right_node_type = type_check_expression($db, &some_or_unknown!($node.right()), $in_node);
 
         if left_node_type != Type::Integer && left_node_type != Type::Real {
             Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
-                    Span::of_node($db, $node.left()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.left()).syntax()),
                     format!("expected int or real, found {}", left_node_type),
                 )
                 .emit($db);
@@ -337,7 +337,7 @@ macro_rules! ty_check_expr {
         if right_node_type != Type::Integer && right_node_type != Type::Real {
             Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
-                    Span::of_node($db, $node.right()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.right()).syntax()),
                     format!("expected int or real, found {}", right_node_type),
                 )
                 .emit($db);
@@ -346,7 +346,7 @@ macro_rules! ty_check_expr {
         if left_node_type != right_node_type {
             Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
-                    Span::of_node($db, $node.right()?.syntax()),
+                    Span::of_node($db, some_or_unknown!($node.right()).syntax()),
                     format!(
                         "expected {} (because of the left operand), found {} (you can use the `{}` function if you want to do a conversion)",
                         left_node_type, right_node_type, left_node_type,
@@ -476,26 +476,26 @@ pub fn type_check_expression(
         ExpressionNode::AddExpressionNode(node) => ty_check_expr!(binary_number, db, node, in_node),
         ExpressionNode::MulExpressionNode(node) => ty_check_expr!(binary_number, db, node, in_node),
         ExpressionNode::PowerExpressionNode(node) => {
-            let left_node_type = type_check_expression(db, &node.left()?, in_node);
-            let right_node_type = type_check_expression(db, &node.right()?, in_node);
-            let size = match *eval_const_node(db, node.right()?, in_node.clone()) {
+            let left_node_type = type_check_expression(db, &some_or_unknown!(node.left()), in_node);
+            let right_node_type = type_check_expression(db, &some_or_unknown!(node.right()), in_node);
+            let size = match *eval_const_node(db, some_or_unknown!(node.right()), in_node.clone()) {
                 Some(ConstValue::Integer(i)) => Some(i as usize),
                 _ => None,
             };
 
             if left_node_type.is_function() {
-                Diagnostic::new(Level::Error, "Incorrect type")
+                Diagnostic::new(Level::Error, "incorrect type")
                     .with_attachment(
-                        Span::of_node(db, node.left()?.syntax()),
-                        "cannot build an array of function. Do you want to call it first?",
+                        Span::of_node(db, some_or_unknown!(node.left()).syntax()),
+                        "cannot build an array of function, do you want to call it first?",
                     )
                     .emit(db);
             }
 
             if right_node_type != Type::Integer {
-                Diagnostic::new(Level::Error, "Incorrect type")
+                Diagnostic::new(Level::Error, "incorrect type")
                     .with_attachment(
-                        Span::of_node(db, node.right()?.syntax()),
+                        Span::of_node(db, some_or_unknown!(node.right()).syntax()),
                         format!("expected int, found {}", right_node_type),
                     )
                     .emit(db);
@@ -503,18 +503,18 @@ pub fn type_check_expression(
 
             Type::Array {
                 elem: Box::new(left_node_type),
-                size: size?,
+                size: some_or_unknown!(size),
             }
         }
         ExpressionNode::IfExpressionNode(node) => {
-            let if_body_type = type_check_expression(db, &node.if_body()?, in_node);
-            let else_body_type = type_check_expression(db, &node.else_body()?, in_node);
-            let cond_type = type_check_expression(db, &node.cond()?, in_node);
+            let if_body_type = type_check_expression(db, &some_or_unknown!(node.if_body()), in_node);
+            let else_body_type = type_check_expression(db, &some_or_unknown!(node.else_body()), in_node);
+            let cond_type = type_check_expression(db, &some_or_unknown!(node.cond()), in_node);
 
             if if_body_type != else_body_type {
                 Diagnostic::new(Level::Error, "incompatible types")
                     .with_attachment(
-                        Span::of_node(db, node.else_body()?.syntax()),
+                        Span::of_node(db, some_or_unknown!(node.else_body()).syntax()),
                         format!(
                             "expected {} (because of if body), found {}",
                             if_body_type, else_body_type
@@ -526,7 +526,7 @@ pub fn type_check_expression(
             if cond_type != Type::Boolean {
                 Diagnostic::new(Level::Error, "Incorrect type")
                     .with_attachment(
-                        Span::of_node(db, node.cond()?.syntax()),
+                        Span::of_node(db, some_or_unknown!(node.cond()).syntax()),
                         format!("expected a boolean condition, found {}", cond_type),
                     )
                     .emit(db);
@@ -535,14 +535,14 @@ pub fn type_check_expression(
             if_body_type
         }
         ExpressionNode::WithExpressionNode(node) => {
-            let with_body_type = type_check_expression(db, &node.with_body()?, in_node);
-            let else_body_type = type_check_expression(db, &node.else_body()?, in_node);
-            let cond_type = type_check_expression(db, &node.cond()?, in_node);
+            let with_body_type = type_check_expression(db, &some_or_unknown!(node.with_body()), in_node);
+            let else_body_type = type_check_expression(db, &some_or_unknown!(node.else_body()), in_node);
+            let cond_type = type_check_expression(db, &some_or_unknown!(node.cond()), in_node);
 
             if with_body_type != else_body_type {
                 Diagnostic::new(Level::Error, "incompatible types")
                     .with_attachment(
-                        Span::of_node(db, node.else_body()?.syntax()),
+                        Span::of_node(db, some_or_unknown!(node.else_body()).syntax()),
                         format!(
                             "expected {} (because of if body), found {}",
                             with_body_type, else_body_type
@@ -554,7 +554,7 @@ pub fn type_check_expression(
             if cond_type != Type::Boolean {
                 Diagnostic::new(Level::Error, "Incorrect type")
                     .with_attachment(
-                        Span::of_node(db, node.cond()?.syntax()),
+                        Span::of_node(db, some_or_unknown!(node.cond()).syntax()),
                         format!("expected a boolean condition, found {}", cond_type),
                     )
                     .emit(db);
@@ -595,7 +595,7 @@ pub fn type_check_expression(
             Type::Boolean
         }
         ExpressionNode::IdentExpressionNode(node) => {
-            let ident = node.id_node()?.ident()?;
+            let ident = some_or_unknown!(some_or_unknown!(node.id_node()).ident());
             let query = NameResolveQuery {
                 ident,
                 in_node: in_node.clone(),
@@ -603,18 +603,18 @@ pub fn type_check_expression(
             let resolved_node = resolve_runtime_node(db, query);
             match *resolved_node {
                 Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => {
-                    type_of_ast_type(db, in_node.clone(), const_decl_node.type_node()?).as_ref().clone()
+                    type_of_ast_type(db, in_node.clone(), some_or_unknown!(const_decl_node.type_node())).as_ref().clone()
                 }
                 Some(ResolvedRuntimeNode::Param(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => {
-                    type_of_ast_type(db, in_node.clone(), var_decl_node.type_node()?).as_ref().clone()
+                    type_of_ast_type(db, in_node.clone(), some_or_unknown!(var_decl_node.type_node())).as_ref().clone()
                 }
                 None => Type::Unknown,
             }
         }
         ExpressionNode::ParExpressionNode(node) => {
-            type_check_expression(db, &node.expression_node()?, in_node)
+            type_check_expression(db, &some_or_unknown!(node.expression_node()), in_node)
         }
         ExpressionNode::CallByPosExpressionNode(expr) => {
             let name = expr
@@ -721,12 +721,12 @@ fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<N
             let resolved_node = resolve_runtime_node(db, query);
             match *resolved_node {
                 Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => {
-                    type_of_ast_type(db, in_node.clone(), const_decl_node.type_node()?).as_ref().clone()
+                    type_of_ast_type(db, in_node.clone(), some_or_unknown!(const_decl_node.type_node())).as_ref().clone()
                 }
                 Some(ResolvedRuntimeNode::Param(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => {
-                    type_of_ast_type(db, in_node.clone(), var_decl_node.type_node()?).as_ref().clone()
+                    type_of_ast_type(db, in_node.clone(), some_or_unknown!(var_decl_node.type_node())).as_ref().clone()
                 }
                 None => Type::Unknown,
             }
