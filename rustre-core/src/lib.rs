@@ -2,6 +2,13 @@
 //!
 //! It is built around [yeter].
 
+pub mod diagnostics;
+pub mod expression;
+pub mod name_resolution;
+pub mod node_state;
+pub mod eval;
+mod types;
+
 use std::path::PathBuf;
 use crate::{diagnostics::{Diagnostic, Level, Span}, types::type_check_query};
 
@@ -11,12 +18,6 @@ use rustre_parser::ast::{
 use std::rc::Rc;
 use yeter::Database;
 
-pub mod diagnostics;
-pub mod expression;
-pub mod name_resolution;
-pub mod node_state;
-pub mod eval;
-mod types;
 
 /// Builds a new compiler driver, that corresponds to a compilation session
 pub fn driver() -> Database {
