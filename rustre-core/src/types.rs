@@ -98,53 +98,55 @@ impl FromResidual<Option<Infallible>> for Type {
 
 /// **Query**: Type-checks a given node
 #[yeter::query]
-pub fn type_check_query(db: &yeter::Database, node_name: String) -> Type {
-    let node_node = crate::name_resolution::find_node(db, node_name);
-    let body_node = node_node.as_ref().as_ref().unwrap().body_node();
+pub fn type_check_query(db: &yeter::Database, node_node: NodeNode) -> Type {
+    let body_node = node_node.body_node();
+    let in_node = Some(node_node.clone());
 
     for node in body_node.as_ref().unwrap().all_equals_equation_node() {
-        let lefts = node.left_node().unwrap().all_left_item_node();
-        let mut left_types = Vec::new();
-        for left in lefts {
-            let left_type = type_check_left(db, &left, &node_node);
-            left_types.push(left_type);
-        }
-        let left_types = if left_types.len() == 1 {
-            left_types.pop().unwrap()
-        } else {
-            Type::Tuple(left_types)
-        };
+        if let (Some(left_node), Some(expr_node)) = (node.left_node(), node.expression_node()) {
+            let lefts = left_node.all_left_item_node();
+            let mut left_types = Vec::new();
+            for left in lefts {
+                let left_type = type_check_left(db, &left, &in_node);
+                left_types.push(left_type);
+            }
+            let left_types = if left_types.len() == 1 {
+                left_types.pop().unwrap()
+            } else {
+                Type::Tuple(left_types)
+            };
 
-        let right_types = type_check_expression(db, &node.expression_node().unwrap(), &node_node);
+            let right_types = type_check_expression(db, &expr_node, &in_node);
 
-        if left_types != right_types {
-            Diagnostic::new(Level::Error, "Incompatible types")
-                .with_attachment(
-                    Span::of_node(db, node.left_node().unwrap().syntax()),
-                    format!("The left part is of type {}", left_types),
-                )
-                .with_attachment(
-                    Span::of_node(db, node.expression_node().unwrap().syntax()),
-                    format!("While the right part is of type {}", right_types),
-                )
-                .emit(db);
+            if left_types != right_types {
+                Diagnostic::new(Level::Error, "incompatible types")
+                    .with_attachment(
+                        Span::of_node(db, node.left_node().unwrap().syntax()),
+                        format!("the left term is of type {}", left_types),
+                    )
+                    .with_attachment(
+                        Span::of_node(db, node.expression_node().unwrap().syntax()),
+                        format!("while the right term is of type {}", right_types),
+                    )
+                    .emit(db);
+            }
         }
     }
 
     for node in body_node.as_ref().unwrap().all_assert_equation_node() {
-        let right_types = type_check_expression(db, &node.expression_node().unwrap(), &node_node);
+        let right_types = type_check_expression(db, &node.expression_node().unwrap(), &in_node);
 
         if right_types != Type::Boolean {
-            Diagnostic::new(Level::Error, "Assertions should be boolean expressions")
+            Diagnostic::new(Level::Error, "assertions should be boolean expressions")
                 .with_attachment(
                     Span::of_node(db, node.expression_node().unwrap().syntax()),
-                    format!("This expression has type {}", right_types),
+                    format!("this expression has type {}", right_types),
                 )
                 .emit(db);
         }
     }
 
-    let node_profile_node = node_node.as_ref().as_ref().unwrap().node_profile_node();
+    let node_profile_node = node_node.node_profile_node();
     let mut args = Vec::new();
     let mut ret = Vec::new();
 
@@ -158,7 +160,7 @@ pub fn type_check_query(db: &yeter::Database, node_name: String) -> Type {
     for param in params {
         let typed_id_nodes = param.all_typed_ids_node();
         for type_nodes in typed_id_nodes {
-            args.push(parse_type(type_nodes.type_node().unwrap()));
+            args.push(type_of_ast_type(db, in_node.clone(), type_nodes.type_node().unwrap()).as_ref().clone());
         }
     }
 
@@ -172,7 +174,7 @@ pub fn type_check_query(db: &yeter::Database, node_name: String) -> Type {
     for return_param in return_params {
         let typed_id_nodes = return_param.all_typed_ids_node();
         for type_nodes in typed_id_nodes {
-            ret.push(parse_type(type_nodes.type_node().unwrap()));
+            ret.push(type_of_ast_type(db, in_node.clone(), type_nodes.type_node().unwrap()).as_ref().clone());
         }
     }
     Type::Function { args, ret }
@@ -193,7 +195,7 @@ pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNo
             Some(decl) => Type::clone(
                 &decl
                     .type_node()
-                    .map(|t| type_of_ast_type(db, node, t))
+                    .map(|t| type_of_ast_type(db, node.clone(), t))
                     .unwrap_or_default(),
             ),
             None => {
@@ -213,7 +215,11 @@ pub fn type_of_ast_type(db: &Database, node: Option<NodeNode>, type_node: TypeNo
     };
 
     if let Some(power) = type_node.power() {
-        todo!("const-eval array length ({power:?}) using {type_node:?}");
+        let size = match *eval_const_node(db, power, node) {
+            Some(ConstValue::Integer(i)) => i as usize,
+            _ => return Type::Unknown,
+        };
+        Type::Array { elem: Box::new(scalar), size }
     } else {
         scalar
     }
@@ -229,7 +235,7 @@ macro_rules! ty_check_expr {
                 Diagnostic::new(Level::Error, $message)
                     .with_attachment(
                         Span::of_node($db, operand.syntax()),
-                        format!("This expression is of type {}", type_exp),
+                        format!("this expression is of type {}", type_exp),
                     )
                     .emit($db);
                 Type::Unknown
@@ -242,14 +248,14 @@ macro_rules! ty_check_expr {
         if left_node_type == right_node_type {
             left_node_type
         } else {
-            Diagnostic::new(Level::Error, "Both expressions should be of the same type")
+            Diagnostic::new(Level::Error, "incompatible types")
                 .with_attachment(
                     Span::of_node($db, $node.left()?.syntax()),
-                    format!("This is of type {}", left_node_type),
+                    format!("this is of type {}", left_node_type),
                 )
                 .with_attachment(
                     Span::of_node($db, $node.right()?.syntax()),
-                    format!("While this is of type {}", right_node_type),
+                    format!("while this is of type {}", right_node_type),
                 )
                 .emit($db);
             Type::Unknown
@@ -260,19 +266,19 @@ macro_rules! ty_check_expr {
         let right_node_type = type_check_expression($db, &$node.right()?, $in_node);
 
         if left_node_type != $expect {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.left().unwrap().syntax()),
-                    format!("Expected {}, found {}", $expect, left_node_type),
+                    format!("expected {}, found {}", $expect, left_node_type),
                 )
                 .emit($db);
         }
 
         if right_node_type != $expect {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.right().unwrap().syntax()),
-                    format!("Expected {}, found {}", $expect, right_node_type),
+                    format!("expected {}, found {}", $expect, right_node_type),
                 )
                 .emit($db);
         }
@@ -284,29 +290,29 @@ macro_rules! ty_check_expr {
         let right_node_type = type_check_expression($db, &$node.right()?, $in_node);
 
         if left_node_type != Type::Integer && left_node_type != Type::Real {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.left()?.syntax()),
-                    format!("Expected int or real, found {}", left_node_type),
+                    format!("expected int or real, found {}", left_node_type),
                 )
                 .emit($db);
         }
 
         if right_node_type != Type::Integer && right_node_type != Type::Real {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.right()?.syntax()),
-                    format!("Expected int or real, found {}", right_node_type),
+                    format!("expected int or real, found {}", right_node_type),
                 )
                 .emit($db);
         }
 
         if left_node_type != right_node_type {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.right()?.syntax()),
                     format!(
-                        "Expected {} (because of the left operand), found {}. You can use the `{}` function if you want to do a conversion.",
+                        "expected {} (because of the left operand), found {} (you can use the `{}` function if you want to do a conversion)",
                         left_node_type, right_node_type, left_node_type,
                     ),
                 )
@@ -320,29 +326,29 @@ macro_rules! ty_check_expr {
         let right_node_type = type_check_expression($db, &$node.right()?, $in_node);
 
         if left_node_type != Type::Integer && left_node_type != Type::Real {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.left()?.syntax()),
-                    format!("Expected int or real, found {}", left_node_type),
+                    format!("expected int or real, found {}", left_node_type),
                 )
                 .emit($db);
         }
 
         if right_node_type != Type::Integer && right_node_type != Type::Real {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.right()?.syntax()),
-                    format!("Expected int or real, found {}", right_node_type),
+                    format!("expected int or real, found {}", right_node_type),
                 )
                 .emit($db);
         }
 
         if left_node_type != right_node_type {
-            Diagnostic::new(Level::Error, "Incorrect type")
+            Diagnostic::new(Level::Error, "incorrect type")
                 .with_attachment(
                     Span::of_node($db, $node.right()?.syntax()),
                     format!(
-                        "Expected {} (because of the left operand), found {}. You can use the `{}` function if you want to do a conversion.",
+                        "expected {} (because of the left operand), found {} (you can use the `{}` function if you want to do a conversion)",
                         left_node_type, right_node_type, left_node_type,
                     ),
                 )
@@ -393,20 +399,20 @@ pub fn type_check_expression(
             match type_exp {
                 Type::Real => Type::Integer,
                 Type::Integer => {
-                    Diagnostic::new(Level::Warning, "Useless type conversion")
+                    Diagnostic::new(Level::Warning, "useless type conversion")
                         .with_attachment(
                             Span::of_node(db, node.operand().unwrap().syntax()),
-                            "This expression is already an int",
+                            "this expression is already an int",
                         )
                         .emit(db);
                     Type::Integer
                 }
                 _ => {
-                    Diagnostic::new(Level::Error, "Invalid type conversion")
+                    Diagnostic::new(Level::Error, "invalid type conversion")
                         .with_attachment(
                             Span::of_node(db, node.operand().unwrap().syntax()),
                             format!(
-                                "This expression has type {}, which cannot be converted to int.",
+                                "this expression has type {}, which cannot be converted to int.",
                                 type_exp
                             ),
                         )
@@ -421,20 +427,20 @@ pub fn type_check_expression(
             match type_exp {
                 Type::Integer => Type::Real,
                 Type::Real => {
-                    Diagnostic::new(Level::Warning, "Useless type conversion")
+                    Diagnostic::new(Level::Warning, "useless type conversion")
                         .with_attachment(
                             Span::of_node(db, node.operand().unwrap().syntax()),
-                            "This expression is already a real",
+                            "this expression is already a real",
                         )
                         .emit(db);
                     Type::Real
                 }
                 _ => {
-                    Diagnostic::new(Level::Error, "Invalid type conversion")
+                    Diagnostic::new(Level::Error, "invalid type conversion")
                         .with_attachment(
                             Span::of_node(db, node.operand().unwrap().syntax()),
                             format!(
-                                "This expression has type {}, which cannot be converted to real.",
+                                "this expression has type {}, which cannot be converted to real.",
                                 type_exp
                             ),
                         )
@@ -481,7 +487,7 @@ pub fn type_check_expression(
                 Diagnostic::new(Level::Error, "Incorrect type")
                     .with_attachment(
                         Span::of_node(db, node.left()?.syntax()),
-                        "Cannot build an array of function. Do you want to call it first?",
+                        "cannot build an array of function. Do you want to call it first?",
                     )
                     .emit(db);
             }
@@ -490,7 +496,7 @@ pub fn type_check_expression(
                 Diagnostic::new(Level::Error, "Incorrect type")
                     .with_attachment(
                         Span::of_node(db, node.right()?.syntax()),
-                        format!("Expected int, found {}", right_node_type),
+                        format!("expected int, found {}", right_node_type),
                     )
                     .emit(db);
             }
@@ -506,11 +512,11 @@ pub fn type_check_expression(
             let cond_type = type_check_expression(db, &node.cond()?, in_node);
 
             if if_body_type != else_body_type {
-                Diagnostic::new(Level::Error, "Incompatible types")
+                Diagnostic::new(Level::Error, "incompatible types")
                     .with_attachment(
                         Span::of_node(db, node.else_body()?.syntax()),
                         format!(
-                            "Expected {} (because of if body), found {}",
+                            "expected {} (because of if body), found {}",
                             if_body_type, else_body_type
                         ),
                     )
@@ -521,7 +527,7 @@ pub fn type_check_expression(
                 Diagnostic::new(Level::Error, "Incorrect type")
                     .with_attachment(
                         Span::of_node(db, node.cond()?.syntax()),
-                        format!("Expected a boolean condition, found {}", cond_type),
+                        format!("expected a boolean condition, found {}", cond_type),
                     )
                     .emit(db);
             }
@@ -534,11 +540,11 @@ pub fn type_check_expression(
             let cond_type = type_check_expression(db, &node.cond()?, in_node);
 
             if with_body_type != else_body_type {
-                Diagnostic::new(Level::Error, "Incompatible types")
+                Diagnostic::new(Level::Error, "incompatible types")
                     .with_attachment(
                         Span::of_node(db, node.else_body()?.syntax()),
                         format!(
-                            "Expected {} (because of if body), found {}",
+                            "expected {} (because of if body), found {}",
                             with_body_type, else_body_type
                         ),
                     )
@@ -549,7 +555,7 @@ pub fn type_check_expression(
                 Diagnostic::new(Level::Error, "Incorrect type")
                     .with_attachment(
                         Span::of_node(db, node.cond()?.syntax()),
-                        format!("Expected a boolean condition, found {}", cond_type),
+                        format!("expected a boolean condition, found {}", cond_type),
                     )
                     .emit(db);
             }
@@ -564,7 +570,7 @@ pub fn type_check_expression(
                     Diagnostic::new(Level::Error, "Incorrect type")
                         .with_attachment(
                             Span::of_node(db, element.syntax()),
-                            format!("Expected boolean, found {}", el_type),
+                            format!("expected boolean, found {}", el_type),
                         )
                         .emit(db);
                 }
@@ -580,7 +586,7 @@ pub fn type_check_expression(
                     Diagnostic::new(Level::Error, "Incorrect type")
                         .with_attachment(
                             Span::of_node(db, element.syntax()),
-                            format!("Expected boolean, found {}", el_type),
+                            format!("expected boolean, found {}", el_type),
                         )
                         .emit(db);
                 }
@@ -597,12 +603,12 @@ pub fn type_check_expression(
             let resolved_node = resolve_runtime_node(db, query);
             match *resolved_node {
                 Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => {
-                    parse_type(const_decl_node.type_node()?)
+                    type_of_ast_type(db, in_node.clone(), const_decl_node.type_node()?).as_ref().clone()
                 }
                 Some(ResolvedRuntimeNode::Param(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => {
-                    parse_type(var_decl_node.type_node()?)
+                    type_of_ast_type(db, in_node.clone(), var_decl_node.type_node()?).as_ref().clone()
                 }
                 None => Type::Unknown,
             }
@@ -715,12 +721,12 @@ fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<N
             let resolved_node = resolve_runtime_node(db, query);
             match *resolved_node {
                 Some(ResolvedRuntimeNode::Const(ref const_decl_node)) => {
-                    parse_type(const_decl_node.type_node()?)
+                    type_of_ast_type(db, in_node.clone(), const_decl_node.type_node()?).as_ref().clone()
                 }
                 Some(ResolvedRuntimeNode::Param(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::ReturnParam(ref var_decl_node))
                 | Some(ResolvedRuntimeNode::Var(ref var_decl_node)) => {
-                    parse_type(var_decl_node.type_node()?)
+                    type_of_ast_type(db, in_node.clone(), var_decl_node.type_node()?).as_ref().clone()
                 }
                 None => Type::Unknown,
             }
@@ -734,20 +740,10 @@ fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<N
     }
 }
 
-fn parse_type(node: TypeNode) -> Type {
-    if node.bool().is_some() {
-        Type::Boolean
-    } else if node.int().is_some() {
-        Type::Integer
-    } else if node.real().is_some() {
-        Type::Real
-    } else {
-        todo!("Arrays, functions and structures are not supported yet.")
-    }
-}
-
 #[cfg(test)]
 mod tests {
+    use crate::name_resolution::find_node;
+
     use super::*;
 
     #[test]
@@ -759,21 +755,21 @@ mod tests {
         "));
 
         assert_eq!(
-            type_check_query(&db, String::from("add")).as_ref(),
+            type_check_query(&db, find_node(&db, "add".into()).as_ref().as_ref().unwrap().clone()).as_ref(),
             &Type::Function {
                 args: vec![],
                 ret: vec![]
             }
         );
         assert_eq!(
-            type_check_query(&db, String::from("sub")).as_ref(),
+            type_check_query(&db, find_node(&db, "sub".into()).as_ref().as_ref().unwrap().clone()).as_ref(),
             &Type::Function {
                 args: vec![],
                 ret: vec![]
             }
         );
         assert_eq!(
-            type_check_query(&db, String::from("id")).as_ref(),
+            type_check_query(&db, find_node(&db, "id".into()).as_ref().as_ref().unwrap().clone()).as_ref(),
             &Type::Function {
                 args: vec![Type::Integer],
                 ret: vec![Type::Integer]

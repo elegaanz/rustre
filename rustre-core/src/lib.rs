@@ -5,7 +5,7 @@
 //! It is built around [yeter].
 
 use std::path::PathBuf;
-use crate::diagnostics::{Diagnostic, Level, Span};
+use crate::{diagnostics::{Diagnostic, Level, Span}, types::type_check_query};
 
 use rustre_parser::ast::{
     AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
@@ -96,7 +96,6 @@ fn parsed_files(db: &Database) -> Vec<Rc<Root>> {
 
 #[yeter::query]
 pub fn get_signature(_db: &Database, node: NodeNode) -> Signature {
-    println!("coucou c la signgature:!!!!!\n\n\n");
     let sig = node.node_profile_node();
 
     let get_params = |f: fn(&NodeProfileNode) -> Option<ParamsNode>| {
@@ -144,13 +143,7 @@ pub fn check(db: &Database) {
         for node in file.all_node_node() {
             let _ = get_typed_signature(db, node.clone());
 
-            if let Some(body) = node.clone().body_node() {
-                for equation in body.all_equals_equation_node() {
-                    if let Some(expression) = equation.expression_node() {
-                        let _ = types::type_check_expression(db, &expression, &Some(node.clone()));
-                    }
-                }
-            }
+            let _ = type_check_query(db, node.clone());
 
             node_state::check_node_function_state(db, node);
         }
