@@ -31,7 +31,7 @@
 
 node a(x : int) returns (y : int)
 let
-    y = x;
+    y = x and 12.6;
 tel
 
 node b(x : bool^4) returns (y : bool)
