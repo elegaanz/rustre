@@ -17,6 +17,11 @@
 2. [Type-checking]()
 3. [Vérification de l'initialisation](typechecking/initialization.md)
 
+# Extended code
+
+- [Génération](ec/generation.md)
+- [Simulation]()
+
 # Annexes
 
 - [Glossaire](annexes/glossary.md)
