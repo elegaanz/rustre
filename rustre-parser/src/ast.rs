@@ -137,6 +137,7 @@ impl_bin_expr!(SubExpressionNode);
 impl_bin_expr!(AddExpressionNode);
 impl_bin_expr!(MulExpressionNode);
 impl_bin_expr!(PowerExpressionNode);
+impl_bin_expr!(HatExpressionNode);
 
 macro_rules! impl_un_expr {
     ($name:ident) => {
