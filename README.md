@@ -6,6 +6,8 @@
 [![](https://img.shields.io/badge/journal%20de%20bord-md.edgar.bzh-blue)](https://md.edgar.bzh/s/P3MB8tN_x)
 [![](https://img.shields.io/gitlab/license/Projets-INFO4/22-23/26/rustre?gitlab_url=https%3A%2F%2Fgricad-gitlab.univ-grenoble-alpes.fr%2F)]()
 
+![Project report](https://projets-info4.gricad-pages.univ-grenoble-alpes.fr/22-23/26/docs/report.pdf)
+
 ## Crates
 
 - `rustre-parser`: the main parser, emits an untyped AST
