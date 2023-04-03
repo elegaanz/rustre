@@ -72,8 +72,6 @@ pub fn parse_file(db: &Database, file: SourceFile) -> Root {
             .emit(db);
     }
 
-    db.set::<diagnostics::file_for_root>((root.syntax().clone(),), Some(file.path));
-
     root
 }
 

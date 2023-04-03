@@ -1,0 +1,11 @@
+-- Useless `node`
+node add (a, b : int) returns (res : int);
+let
+  res = a + b;
+tel;
+
+-- Try writing `function` instead of node
+node sum_all (a : int) returns (res : int);
+let
+  res = 0 -> add(pre res, a);
+tel;

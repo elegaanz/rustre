@@ -1,0 +1,7 @@
+type T = int;
+
+-- Try to write a non-existing type
+function indent (in : T) returns (out : T);
+let
+    out = in;
+tel;
