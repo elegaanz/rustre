@@ -1,0 +1,11 @@
+function add (a, b : int) returns (res : int);
+let
+  res = a + b;
+tel;
+
+-- Function arity
+-- Demo: too many/not enough argument, and bad types
+function three () returns (three : int);
+let
+  three = add(1, 2);
+tel;

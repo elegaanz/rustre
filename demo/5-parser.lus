@@ -1,0 +1,5 @@
+-- Missing semicolon
+function add (a, b : int) returns (res : int);
+let
+  res = a + b
+tel;

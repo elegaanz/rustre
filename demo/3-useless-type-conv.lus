@@ -1,0 +1,4 @@
+function identity (in : int) returns (out : int);
+let
+  out = int in;
+tel;

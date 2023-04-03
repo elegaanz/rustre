@@ -17,7 +17,13 @@ impl Debug for Span {
 }
 
 #[yeter::query]
-pub fn file_for_root(db: yeter::Database, root: SyntaxNode) -> Option<PathBuf>;
+pub fn file_for_root(db: &yeter::Database, _root: SyntaxNode) -> Option<PathBuf> {
+    let files = crate::files(db);
+    let files = files.as_ref().as_deref().unwrap_or_default();
+
+    // TODO: we assume only one file is loaded, that's stupid
+    files.get(0).map(|s| s.path.clone())
+}
 
 /// Returns the length of the trivia preceding a node
 fn preceding_trivia_len(syntax: &SyntaxNode) -> usize {
