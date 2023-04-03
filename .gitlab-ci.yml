@@ -3,7 +3,7 @@ image: nixos/nix:latest
 pages:
     script:
     - nix --extra-experimental-features nix-command develop --extra-experimental-features flakes -c mdbook build -d public
-    - nix --extra-experimental-features nix-command develop --extra-experimental-features flakes -c typst report/main.typ public/report.pdf
+    - nix --extra-experimental-features nix-command develop --extra-experimental-features flakes -c typst compile report/main.typ public/report.pdf
     artifacts:
         paths:
         - public
