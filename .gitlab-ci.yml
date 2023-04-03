@@ -2,7 +2,8 @@ image: nixos/nix:latest
 
 pages:
     script:
-    - nix-shell --run 'mdbook build -d public'
+    - nix develop -c 'mdbook build -d public'
+    - nix develop -c 'typst report/main.typ public/report.pdf'
     artifacts:
         paths:
         - public
