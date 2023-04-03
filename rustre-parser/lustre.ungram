@@ -111,6 +111,7 @@ ExpressionNode = ConstantNode
     | NorExpressionNode
     | ParExpressionNode
     | CallByPosExpressionNode
+    | HatExpressionNode
 
 IdentExpressionNode = IdNode
 ParExpressionNode = ExpressionNode
@@ -147,6 +148,7 @@ WithExpressionNode = 'with' cond:ExpressionNode 'then' with_body:ExpressionNode 
 DieseExpressionNode = 'diese' list:ExpressionListNode
 NorExpressionNode = 'nor' list:ExpressionListNode
 CallByPosExpressionNode = node_ref:IdentExpressionNode 'open_par' args:ExpressionNode* 'close_par' // TODO static args
+HatExpressionNode = left:ExpressionNode 'hat' right:ExpressionNode
 
 // === ConstantRules ===
 

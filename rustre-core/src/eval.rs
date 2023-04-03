@@ -353,6 +353,18 @@ pub fn eval_const_node(db: &Database, node: ExpressionNode, in_node: Option<Node
                 _ => todo!(),
             }
         },
+        ExpressionNode::HatExpressionNode(node) => {
+            let left = Option::clone(&eval_const_node(db, node.left()?.clone(), in_node.clone()))?;
+            let right = Option::clone(&eval_const_node(db, node.right()?.clone(), in_node.clone()))?;
+            match right {
+                ConstValue::Integer(i) => {
+                    return Some(ConstValue::Array(std::iter::repeat(left).take(i as usize).collect()));
+                }
+                _ => {
+                    return None;
+                }
+            }
+        }
         ExpressionNode::WithExpressionNode(_) => todo!(),
         ExpressionNode::DieseExpressionNode(_) => todo!(),
         ExpressionNode::NorExpressionNode(_) => todo!(),

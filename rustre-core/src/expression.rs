@@ -37,6 +37,7 @@ pub enum BakedExpression {
     Sub(Box<BakedExpression>, Box<BakedExpression>),
     Mul(Box<BakedExpression>, Box<BakedExpression>),
     Power(Box<BakedExpression>, Box<BakedExpression>),
+    Hat(Box<BakedExpression>, Box<BakedExpression>),
     Fby(Box<BakedExpression>, Box<BakedExpression>),
     When(Box<BakedExpression>, Box<BakedExpression>),
     Arrow(Box<BakedExpression>, Box<BakedExpression>),
@@ -157,6 +158,7 @@ impl BakedExpression {
             ExpressionNode::CallByPosExpressionNode(_node) => {
                 todo!()
             }
+            ExpressionNode::HatExpressionNode(node) => Self::bake_binary(Self::Hat, &node),
         }
     }
 

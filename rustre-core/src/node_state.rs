@@ -43,7 +43,7 @@ use crate::types::Type;
 ///
 /// The indices of entries in both [BTreeMap]s is considered stable and may be used for
 /// identification.
-#[derive(Clone, Debug, Default, Eq, Hash, PartialEq)]
+#[derive(Clone, Debug, Default, Hash, PartialEq)]
 pub struct NodeState {
     /// Mapping of call site expressions to the [NodeState] of the resolved node
     pub call_sites: BTreeMap<CallByPosExpressionNode, Rc<NodeState>>,
@@ -99,7 +99,7 @@ fn extract_state(
                 return;
             };
 
-            let ty = crate::types::type_check_expression(db, &operand, in_node);
+            let ty = crate::types::type_check_expression(db, &operand, in_node, None);
             stack.extend([operand]);
 
             builder.push_operator(expr, ty);
@@ -112,7 +112,7 @@ fn extract_state(
                 return;
             };
 
-            let ty = crate::types::type_check_expression(db, &left, in_node);
+            let ty = crate::types::type_check_expression(db, &left, in_node, None);
 
             builder.push_operator(expr, ty);
         }
@@ -146,6 +146,7 @@ fn extract_state(
         ExpressionNode::AddExpressionNode(e) => e!(stack ++= e),
         ExpressionNode::MulExpressionNode(e) => e!(stack ++= e),
         ExpressionNode::PowerExpressionNode(e) => e!(stack ++= e),
+        ExpressionNode::HatExpressionNode(e) => e!(stack ++= e),
         ExpressionNode::IfExpressionNode(e) => {
             stack.extend(e.cond());
             stack.extend(e.if_body());
