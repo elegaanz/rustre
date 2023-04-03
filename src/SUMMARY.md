@@ -13,9 +13,8 @@
 
 # Type-checking
 
-1. [Graphe non typé]()
-2. [Type-checking]()
-3. [Vérification de l'initialisation](typechecking/initialization.md)
+1. [Type-checking](typechecking/types.md)
+2. [Vérification de l'initialisation](typechecking/initialization.md)
 
 # Extended code
 
