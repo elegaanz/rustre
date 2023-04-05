@@ -3,8 +3,7 @@ use crate::eval::eval_const_node;
 use crate::name_resolution::{resolve_runtime_node, NameResolveQuery, ResolvedRuntimeNode};
 use crate::TypedSignature;
 use rustre_parser::ast::{
-    AstNode, AstToken, CallByPosExpressionNode, ExpressionNode, LeftItemNode, NodeNode,
-    TypeNode,
+    AstNode, AstToken, CallByPosExpressionNode, ExpressionNode, LeftItemNode, NodeNode, TypeNode,
 };
 use yeter::Database;
 
@@ -45,17 +44,11 @@ pub enum ConstValue {
 
 impl Type {
     pub fn is_function(&self) -> bool {
-        match self {
-            Type::Function { .. } => true,
-            _ => false,
-        }
+        matches!(self, Type::Function { .. })
     }
 
     pub fn is_array(&self) -> bool {
-        match self {
-            Type::Array { .. } => true,
-            _ => false,
-        }
+        matches!(self, Type::Array { .. })
     }
 
     pub fn is_unknown(&self) -> bool {
@@ -261,12 +254,16 @@ pub fn declared_type_of_ident(db: &Database, query: NameResolveQuery) -> Option<
 
     Some(match resolved_node {
         ResolvedRuntimeNode::Const(const_decl_node) => {
-            type_of_ast_type(db, in_node, const_decl_node.type_node()?).as_ref().clone()
+            type_of_ast_type(db, in_node, const_decl_node.type_node()?)
+                .as_ref()
+                .clone()
         }
         ResolvedRuntimeNode::Param(var_decl_node)
         | ResolvedRuntimeNode::ReturnParam(var_decl_node)
         | ResolvedRuntimeNode::Var(var_decl_node) => {
-            type_of_ast_type(db, in_node, var_decl_node.type_node()?).as_ref().clone()
+            type_of_ast_type(db, in_node, var_decl_node.type_node()?)
+                .as_ref()
+                .clone()
         }
     })
 }
@@ -431,7 +428,7 @@ pub fn type_check_expression(
 ) -> Type {
     match expr {
         ExpressionNode::ConstantNode(constant) => {
-            return if constant.is_true() || constant.is_false() {
+            if constant.is_true() || constant.is_false() {
                 Type::Boolean
             } else if constant.i_const().is_some() {
                 Type::Integer

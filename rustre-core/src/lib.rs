@@ -4,21 +4,19 @@
 
 pub mod checks;
 pub mod diagnostics;
-pub mod expression;
+pub mod eval;
 pub mod name_resolution;
 pub mod node_state;
-pub mod eval;
 mod types;
 
-use std::path::PathBuf;
-use crate::{diagnostics::{Diagnostic, Level, Span}, types::type_check_query};
-
-use rustre_parser::ast::{
-    AstNode, Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode,
+use crate::{
+    diagnostics::{Diagnostic, Level, Span},
+    types::type_check_query,
 };
+use rustre_parser::ast::{Ident, NodeNode, NodeProfileNode, ParamsNode, Root, TypedIdsNode};
+use std::path::PathBuf;
 use std::rc::Rc;
 use yeter::Database;
-
 
 /// Builds a new compiler driver, that corresponds to a compilation session
 pub fn driver() -> Database {
@@ -117,13 +115,19 @@ pub fn get_typed_signature(db: &Database, node: NodeNode) -> TypedSignature {
     let sig = get_signature(db, node);
 
     let get_params = |params: &[TypedIdsNode]| {
-        params.iter().flat_map(|group| {
-            let ty = group.type_node()
-                .map(|t| types::type_of_ast_type(db, None, t))
-                .unwrap_or_default();
+        params
+            .iter()
+            .flat_map(|group| {
+                let ty = group
+                    .type_node()
+                    .map(|t| types::type_of_ast_type(db, None, t))
+                    .unwrap_or_default();
 
-            group.all_ident().zip(std::iter::repeat(ty.as_ref().clone()))
-        }).collect::<Vec<_>>()
+                group
+                    .all_ident()
+                    .zip(std::iter::repeat(ty.as_ref().clone()))
+            })
+            .collect::<Vec<_>>()
     };
 
     TypedSignature {

@@ -6,6 +6,7 @@
 //! [rowan's `SyntaxNode`][rowan::SyntaxNode] that provide useful specific getters for each node
 //! kind.
 
+#[allow(warnings, unused)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/ast_generated.rs"));
 }
@@ -65,7 +66,11 @@ pub trait AstToken {
     }
 }
 
-fn debug_ast_node<N: AstNode>(node: &N, f: &mut std::fmt::Formatter<'_>, name: &str) -> std::fmt::Result {
+fn debug_ast_node<N: AstNode>(
+    node: &N,
+    f: &mut std::fmt::Formatter<'_>,
+    name: &str,
+) -> std::fmt::Result {
     write!(f, "{}@{:?}", name, node.syntax().text_range())
 }
 
@@ -155,7 +160,6 @@ impl_un_expr!(PreExpressionNode);
 impl_un_expr!(CurrentExpressionNode);
 impl_un_expr!(IntExpressionNode);
 impl_un_expr!(RealExpressionNode);
-
 
 macro_rules! impl_variadic_expr {
     ($name:ident) => {

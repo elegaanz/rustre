@@ -1,4 +1,4 @@
-image: "edgarogh/rustre-ci"
+image: "edgarogh/rustre-ci:alpine"
 
 # Cache dependencies for faster builds
 # Taken from https://gitlab.com/yvan-sraka/rust-cache-example/-/blob/main/.gitlab-ci.yml
@@ -26,6 +26,10 @@ test:junit-report:
     when: always
     reports:
       junit: $CI_PROJECT_DIR/tests/*.xml
+
+test:style:
+  script:
+    - cargo +nightly fmt --check
 
 # Deploy rustdoc to GitLab pages
 pages:

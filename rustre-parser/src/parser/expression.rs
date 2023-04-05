@@ -217,10 +217,7 @@ pub fn parse_expression_7<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<'
             t(When),
             expect(parse_clock_expr, "expected clock expression after `when`"),
         )),
-        |a, b| {
-            (a + b)
-                .into_node(WhenExpressionNode)
-        },
+        |a, b| (a + b).into_node(WhenExpressionNode),
     )(input)
 }
 

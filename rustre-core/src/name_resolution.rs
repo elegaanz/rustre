@@ -59,9 +59,11 @@ pub fn resolve_const_node(db: &Database, query: NameResolveQuery) -> Option<OneC
         .flat_map(|root| root.all_constant_decl_node())
         .flat_map(|const_decl| const_decl.all_one_constant_decl_node());
 
-    local_scope
-        .chain(global_scope)
-        .find(|one_const| one_const.all_id_node().any(|i| i.ident().unwrap().text() == query.ident.text()))
+    local_scope.chain(global_scope).find(|one_const| {
+        one_const
+            .all_id_node()
+            .any(|i| i.ident().unwrap().text() == query.ident.text())
+    })
 }
 
 /// **Query**
