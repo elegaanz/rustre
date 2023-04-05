@@ -21,7 +21,7 @@ pub fn find_node(db: &Database, node_name: String) -> Option<NodeNode> {
     for file in super::parsed_files(db).as_slice() {
         for node in file.all_node_node() {
             if node.id_node()?.ident()?.text() == node_name {
-                return Some(node.clone());
+                return Some(node);
             }
         }
     }
@@ -59,9 +59,11 @@ pub fn resolve_const_node(db: &Database, query: NameResolveQuery) -> Option<OneC
         .flat_map(|root| root.all_constant_decl_node())
         .flat_map(|const_decl| const_decl.all_one_constant_decl_node());
 
-    local_scope
-        .chain(global_scope)
-        .find(|one_const| one_const.all_id_node().any(|i| i.ident().unwrap().text() == query.ident.text()))
+    local_scope.chain(global_scope).find(|one_const| {
+        one_const
+            .all_id_node()
+            .any(|i| i.ident().unwrap().text() == query.ident.text())
+    })
 }
 
 /// **Query**

@@ -31,7 +31,7 @@ pub fn parse_one_type_decl<'slice, 'src>(input: Input<'slice, 'src>) -> IResult<
                     "expected a struct/enum declaration or an existing type expression",
                 ),
             ))),
-        ))
+        )),
     )(input)
 }
 

@@ -59,8 +59,8 @@ fn main() -> Result<(), u8> {
                     // properly parsed when there is a missing line break at the end
                     // of the file
 
-                    let mut driver = rustre_core::driver();
-                    rustre_core::add_source_file(&mut driver, path);
+                    let driver = rustre_core::driver();
+                    rustre_core::add_source_file(&driver, path);
                     let files = rustre_core::files(&driver);
                     let files = files.as_ref().as_deref().unwrap_or_default();
                     for file in files {
@@ -109,7 +109,7 @@ fn main() -> Result<(), u8> {
 }
 
 fn print(indent: usize, element: rowan::NodeOrToken<SyntaxNode, SyntaxToken>) {
-    let kind: Token = element.kind().into();
+    let kind: Token = element.kind();
     print!("{:indent$}", "", indent = indent);
     match element {
         rowan::NodeOrToken::Node(node) => {

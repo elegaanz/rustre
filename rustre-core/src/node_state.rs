@@ -28,16 +28,14 @@
 //!   * Node call sites: each call site corresponds to an _instanciation_ of a node, with its own
 //!     memory. They have to be recursively accounted for.
 
+use crate::diagnostics::{Diagnostic, Level, Span};
+use crate::types::Type;
+use rustre_parser::ast::{AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode};
 use std::collections::BTreeMap;
 use std::fmt::Debug;
 use std::hash::Hash;
 use std::rc::Rc;
 use yeter::Database;
-
-use crate::diagnostics::{Diagnostic, Level, Span};
-use rustre_parser::ast::{AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode};
-
-use crate::types::Type;
 
 /// Description of the temporally persisted data of a given node
 ///
@@ -151,18 +149,18 @@ fn extract_state(
             stack.extend(e.cond());
             stack.extend(e.if_body());
             stack.extend(e.else_body());
-        },
+        }
         ExpressionNode::WithExpressionNode(e) => {
             stack.extend(e.cond());
             stack.extend(e.with_body());
             stack.extend(e.else_body());
-        },
+        }
         ExpressionNode::DieseExpressionNode(e) => {
             stack.extend(e.list().iter().flat_map(|el| el.all_expression_node()));
-        },
+        }
         ExpressionNode::NorExpressionNode(e) => {
             stack.extend(e.list().iter().flat_map(|el| el.all_expression_node()));
-        },
+        }
         ExpressionNode::ParExpressionNode(e) => {
             stack.extend(e.expression_node());
         }
