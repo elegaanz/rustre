@@ -829,7 +829,7 @@ fn type_check_left(db: &yeter::Database, expr: &LeftItemNode, in_node: &Option<N
     match expr {
         LeftItemNode::IdNode(ident) => {
             let query = NameResolveQuery {
-                ident: ident.ident().unwrap().clone(),
+                ident: ident.ident().unwrap(),
                 in_node: in_node.clone(),
             };
             let resolved_node = resolve_runtime_node(db, query);

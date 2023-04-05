@@ -30,6 +30,7 @@ test:junit-report:
 test:style:
   script:
     - cargo +nightly fmt --check
+    - cargo clippy -- -Dwarnings
 
 # Deploy rustdoc to GitLab pages
 pages:

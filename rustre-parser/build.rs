@@ -1,3 +1,5 @@
+#![allow(clippy::all)] // FIXME
+
 use case::CaseExt;
 use std::collections::HashMap;
 use std::{fs::File, io::Write};

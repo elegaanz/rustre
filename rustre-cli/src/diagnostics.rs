@@ -14,7 +14,7 @@ impl<'a> Display for Path2<'a> {
 }
 
 pub fn print_diagnostics(db: &Database, deny_warnings: bool) -> Result<(), u8> {
-    rustre_core::check(&db);
+    rustre_core::check(db);
 
     let effects = db.effect::<Diagnostic>();
 

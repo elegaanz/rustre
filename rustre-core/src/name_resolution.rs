@@ -21,7 +21,7 @@ pub fn find_node(db: &Database, node_name: String) -> Option<NodeNode> {
     for file in super::parsed_files(db).as_slice() {
         for node in file.all_node_node() {
             if node.id_node()?.ident()?.text() == node_name {
-                return Some(node.clone());
+                return Some(node);
             }
         }
     }
