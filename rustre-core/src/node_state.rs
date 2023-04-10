@@ -29,188 +29,98 @@
 //!     memory. They have to be recursively accounted for.
 
 use crate::diagnostics::{Diagnostic, Level, Span};
-use crate::types::Type;
-use rustre_parser::ast::{AstToken, CallByPosExpressionNode, ExpressionNode, NodeNode};
-use std::collections::BTreeMap;
-use std::fmt::Debug;
-use std::hash::Hash;
-use std::rc::Rc;
+use rustre_parser::ast::expr_visitor::ExpressionWalker;
+use rustre_parser::ast::{
+    ArrowExpressionNode, AstToken, CallByPosExpressionNode, ExpressionNode, FbyExpressionNode,
+    NodeNode, PreExpressionNode,
+};
+use std::collections::HashSet;
 use yeter::Database;
 
-/// Description of the temporally persisted data of a given node
-///
-/// The indices of entries in both [BTreeMap]s is considered stable and may be used for
-/// identification.
-#[derive(Clone, Debug, Default, Hash, PartialEq)]
-pub struct NodeState {
-    /// Mapping of call site expressions to the [NodeState] of the resolved node
-    pub call_sites: BTreeMap<CallByPosExpressionNode, Rc<NodeState>>,
-
-    /// Mapping of a temporal [ExpressionNode] to the type that needs to be stored
-    ///
-    /// Its keys may only correspond to one of the 3 temporal operators.
-    pub operators: BTreeMap<ExpressionNode, Type>,
+struct NodeStateWalker<'db> {
+    db: &'db Database,
+    collected: HashSet<ExpressionNode>,
 }
 
-impl NodeState {
-    /// Returns `true` if the node associated to this [NodeState] doesn't hold any state
-    pub fn is_empty(&self) -> bool {
-        self.call_sites.values().all(|s| s.is_empty()) && self.operators.is_empty()
-    }
-
-    fn push_call_site(&mut self, call_site: CallByPosExpressionNode, sub_state: Rc<NodeState>) {
-        let present = self.call_sites.insert(call_site, sub_state).is_some();
-
-        debug_assert!(!present, "attempted to insert call site twice in NodeState");
-    }
-
-    fn push_operator(&mut self, node: ExpressionNode, ty: Type) {
-        let present = self.operators.insert(node, ty).is_some();
+impl<'db> NodeStateWalker<'db> {
+    fn push(&mut self, node: ExpressionNode) {
+        let present = !self.collected.insert(node);
 
         debug_assert!(
             !present,
-            "attempted to insert expression twice in NodeState"
+            "attempted to insert expression twice in NodeStateWalker"
         );
     }
 }
 
-macro_rules! e {
-    ($stack:ident += $o:expr) => {{
-        $stack.extend($o.operand());
-    }};
-    ($stack:ident ++= $o:expr) => {{
-        $stack.extend($o.left());
-        $stack.extend($o.right());
-    }};
-}
+impl<'db> ExpressionWalker for NodeStateWalker<'db> {
+    fn walk_pre(&mut self, e: PreExpressionNode) {
+        self.push(ExpressionNode::PreExpressionNode(e));
+    }
 
-fn extract_state(
-    db: &Database,
-    expr: ExpressionNode,
-    stack: &mut impl Extend<ExpressionNode>,
-    builder: &mut NodeState,
-    in_node: &Option<NodeNode>,
-) {
-    match &expr {
-        ExpressionNode::PreExpressionNode(e) => {
-            let Some(operand) = e.operand() else {
-                return;
-            };
+    fn walk_fby(&mut self, e: FbyExpressionNode) {
+        self.push(ExpressionNode::FbyExpressionNode(e));
+    }
 
-            let ty = crate::types::type_check_expression(db, &operand, in_node, None);
-            stack.extend([operand]);
+    fn walk_arrow(&mut self, e: ArrowExpressionNode) {
+        self.push(ExpressionNode::ArrowExpressionNode(e));
+    }
 
-            builder.push_operator(expr, ty);
-        }
-        ExpressionNode::FbyExpressionNode(e) => {
-            stack.extend(e.left());
-            stack.extend(e.right());
+    fn walk_call_by_pos(&mut self, e: CallByPosExpressionNode) {
+        if let Some(node_name) = e
+            .node_ref()
+            .and_then(|n| n.id_node())
+            .and_then(|i| i.ident())
+        {
+            let sub_node = Option::clone(&crate::name_resolution::find_node(
+                self.db,
+                node_name.text().into(),
+            ));
 
-            let Some(left) = e.left() else {
-                return;
-            };
-
-            let ty = crate::types::type_check_expression(db, &left, in_node, None);
-
-            builder.push_operator(expr, ty);
-        }
-        ExpressionNode::ArrowExpressionNode(e) => {
-            stack.extend(e.left());
-            stack.extend(e.right());
-            builder.push_operator(expr, Type::Boolean);
-        }
-
-        ExpressionNode::ConstantNode(_) => (),
-        ExpressionNode::IdentExpressionNode(_) => (),
-        ExpressionNode::NotExpressionNode(e) => e!(stack += e),
-        ExpressionNode::NegExpressionNode(e) => e!(stack += e),
-        ExpressionNode::CurrentExpressionNode(e) => e!(stack += e),
-        ExpressionNode::IntExpressionNode(e) => e!(stack += e),
-        ExpressionNode::RealExpressionNode(e) => e!(stack += e),
-        ExpressionNode::WhenExpressionNode(e) => stack.extend(e.left()),
-        ExpressionNode::AndExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::OrExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::XorExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::ImplExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::EqExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::NeqExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::LtExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::LteExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::GtExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::GteExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::DivExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::ModExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::SubExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::AddExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::MulExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::PowerExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::HatExpressionNode(e) => e!(stack ++= e),
-        ExpressionNode::IfExpressionNode(e) => {
-            stack.extend(e.cond());
-            stack.extend(e.if_body());
-            stack.extend(e.else_body());
-        }
-        ExpressionNode::WithExpressionNode(e) => {
-            stack.extend(e.cond());
-            stack.extend(e.with_body());
-            stack.extend(e.else_body());
-        }
-        ExpressionNode::DieseExpressionNode(e) => {
-            stack.extend(e.list().iter().flat_map(|el| el.all_expression_node()));
-        }
-        ExpressionNode::NorExpressionNode(e) => {
-            stack.extend(e.list().iter().flat_map(|el| el.all_expression_node()));
-        }
-        ExpressionNode::ParExpressionNode(e) => {
-            stack.extend(e.expression_node());
-        }
-        ExpressionNode::CallByPosExpressionNode(e) => {
-            if let Some(node_name) = e
-                .node_ref()
-                .and_then(|n| n.id_node())
-                .and_then(|i| i.ident())
-            {
-                let sub_node = crate::name_resolution::find_node(db, node_name.text().into());
-                let sub_state = Option::clone(&sub_node).map(|n| state_of(db, n));
-                builder.push_call_site(e.clone(), sub_state.unwrap_or_default());
+            if matches!(sub_node, Some(sub_node) if *is_node_stateful(self.db, sub_node.clone())) {
+                self.push(ExpressionNode::CallByPosExpressionNode(e));
             }
-
-            stack.extend(e.args());
         }
     }
 }
 
-/// **Query:** Returns a list of types that a node needs to persist from a call to the next
+/// **Query:** Returns a list of stateful expressions in a node
 #[yeter::query]
-pub fn state_of(db: &Database, node: NodeNode) -> NodeState {
+pub fn stateful_expr_of_node(db: &Database, node: NodeNode) -> Vec<ExpressionNode> {
     let Some(body) = node.body_node() else {
-        return NodeState::default();
+        return Default::default();
     };
 
-    let all_expressions = body
-        .all_equals_equation_node()
+    let mut walker = NodeStateWalker {
+        db,
+        collected: Default::default(),
+    };
+
+    body.all_equals_equation_node()
         .flat_map(|e| e.expression_node())
         .chain(
             body.all_assert_equation_node()
                 .flat_map(|e| e.expression_node()),
-        );
+        )
+        .for_each(|e| {
+            walker.walk_expr(e);
+        });
 
-    let mut state = NodeState::default();
+    walker.collected.into_iter().collect()
+}
 
-    // Recurse on a tree of expressions and collect any signs of state
-    let mut stack = all_expressions.collect::<Vec<_>>();
-    while let Some(expr) = stack.pop() {
-        extract_state(db, expr, &mut stack, &mut state, &Some(node.clone()));
-    }
-
-    state
+/// **Query:** Returns `true` if a node contains any stateful expressions (and is thus stateful
+/// itself)
+#[yeter::query]
+pub fn is_node_stateful(db: &Database, node: NodeNode) -> bool {
+    !stateful_expr_of_node(db, node).is_empty()
 }
 
 /// **Query:** Checks the coherence between the use of the `function` or `node` keyword and the
 /// presence or absence of temporal state
 #[yeter::query]
 pub fn check_node_function_state(db: &Database, node: NodeNode) {
-    let has_no_state = state_of(db, node.clone()).is_empty();
+    let has_no_state = !*is_node_stateful(db, node.clone());
 
     if node.is_node() && has_no_state {
         let span = Span::of_token(db, node.node().unwrap().syntax());

@@ -6,6 +6,8 @@
 //! [rowan's `SyntaxNode`][rowan::SyntaxNode] that provide useful specific getters for each node
 //! kind.
 
+pub mod expr_visitor;
+
 #[allow(warnings, unused)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/ast_generated.rs"));
