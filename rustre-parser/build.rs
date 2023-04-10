@@ -186,7 +186,6 @@ impl Generator {
         writeln!(self.out, "use crate::ast::AstNode;").ok();
         writeln!(self.out, "use crate::ast::AstToken;").ok();
         writeln!(self.out, "use crate::lexer::Token;").ok();
-        writeln!(self.out, "use std::cmp::{{Ord, Ordering, PartialOrd}};").ok();
         writeln!(self.out, "use std::fmt::Debug;").ok();
         writeln!(self.out).ok();
     }
@@ -248,20 +247,6 @@ impl Generator {
                         writeln!(self.out, "    }}").ok();
                         writeln!(self.out, "}}").ok();
                     }
-
-                    // impl Ord
-                    writeln!(self.out).ok();
-                    writeln!(self.out, "impl PartialOrd for {} {{", kind).ok();
-                    writeln!(self.out, "    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {{").ok();
-                    writeln!(self.out, "        self.syntax().index().partial_cmp(&other.syntax().index())").ok();
-                    writeln!(self.out, "    }}").ok();
-                    writeln!(self.out, "}}").ok();
-                    writeln!(self.out).ok();
-                    writeln!(self.out, "impl Ord for {} {{", kind).ok();
-                    writeln!(self.out, "    fn cmp(&self, other: &Self) -> Ordering {{").ok();
-                    writeln!(self.out, "        self.syntax().index().cmp(&other.syntax().index())").ok();
-                    writeln!(self.out, "    }}").ok();
-                    writeln!(self.out, "}}").ok();
 
                     if !struc.is_fields.is_empty() || !struc.list_fields.is_empty() || !struc.optional_fields.is_empty() || !struc.unique_fields.is_empty() {
                         writeln!(self.out).ok();
@@ -354,20 +339,6 @@ impl Generator {
                     writeln!(self.out, "impl Debug for {} {{", kind).ok();
                     writeln!(self.out, "    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {{").ok();
                     writeln!(self.out, "        super::debug_ast_node(self, f, {:?})", kind).ok();
-                    writeln!(self.out, "    }}").ok();
-                    writeln!(self.out, "}}").ok();
-
-                    // impl Ord
-                    writeln!(self.out).ok();
-                    writeln!(self.out, "impl PartialOrd for {} {{", kind).ok();
-                    writeln!(self.out, "    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {{").ok();
-                    writeln!(self.out, "        self.syntax().index().partial_cmp(&other.syntax().index())").ok();
-                    writeln!(self.out, "    }}").ok();
-                    writeln!(self.out, "}}").ok();
-                    writeln!(self.out).ok();
-                    writeln!(self.out, "impl Ord for {} {{", kind).ok();
-                    writeln!(self.out, "    fn cmp(&self, other: &Self) -> Ordering {{").ok();
-                    writeln!(self.out, "        self.syntax().index().cmp(&other.syntax().index())").ok();
                     writeln!(self.out, "    }}").ok();
                     writeln!(self.out, "}}").ok();
 
