@@ -440,7 +440,7 @@ impl Token {
     }
 }
 
-/// [Iterator] of lazily-parsed ([Token], [Range<usize>][Range])
+/// [Iterator] of lazily-parsed ([Token], [Range&lt;usize&gt;][Range])
 ///
 /// The range corresponds to the location of the tokens in the source code.
 pub struct Lexer<'source> {
